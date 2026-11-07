@@ -1,0 +1,6 @@
+{
+  "name": "Generador de Test y Supuestos IA - AGE & CAM (Fuente BOE)",
+  "description": "Simulador C1 de tests y supuestos normativos para AGE y Comunidad de Madrid fundamentados en www.boe.es. Versión 2.8 con Almacén de Dudas, Ofimática (Word 365, Outlook, Teams, Power BI), Reglas Mnemotécnicas, Distractores y Convocatorias. Autoría compartida: Julio Sánchez León & AI Studio Build.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementación de la escala oficial convertida en el gráfico Puntuaciones vs Nota de Corte (KPIs). Todos los tests se adaptan proporcionalmente al modelo oficial de 70 preguntas (y 20 preguntas para supuestos), permitiendo una comparativa homogénea, visual y matemática con las notas de corte de la CPS.",
+  "updatedAt":  "2026-10-31T18:22:47.641163010Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
