@@ -219,6 +219,18 @@ export const CATALOGO_LEYES_BOE: LeyBOEInfo[] = [
       /\bLey\s+9\/1990\b/gi,
     ],
   },
+  {
+    clave: 'rd_1708_2011_archivos',
+    nombre: 'Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos',
+    sigla: 'RD 1708/2011 Archivos',
+    idBOE: 'BOE-A-2011-18541',
+    urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541',
+    patrones: [
+      /\b(?:Real\s+Decreto|RD)\s+1708\/2011\b/gi,
+      /\bSistema\s+Espa[ñn]ol\s+de\s+Archivos\b/gi,
+      /\b1708\/2011\b/g,
+    ],
+  },
 ];
 
 /**
@@ -261,7 +273,7 @@ export function renderizarTextoConEnlacesBOE(texto: string): React.ReactNode {
   if (!texto) return null;
 
   // Patrones combinados para detectar referencias normativas en el texto
-  const combinedRegex = /(Constituci[óo]n\s+Espa[ñn]ola(?:\s+de\s+1978)?|Ley\s+39\/2015|LPACAP|LPAC|Ley\s+40\/2015|LRJSP|TREBEP|EBEP|RDL\s+5\/2015|Real\s+Decreto\s+Legislativo\s+5\/2015|Real\s+Decreto\s+364\/1995|RD\s+364\/1995|Real\s+Decreto\s+365\/1995|RD\s+365\/1995|Ley\s+Org[áa]nica\s+3\/2018|LO\s+3\/2018|LOPDGDD|Ley\s+9\/2017|LCSP|Ley\s+47\/2003|LGP|Ley\s+Org[áa]nica\s+2\/2012|LO\s+2\/2012|Ley\s+2\/2012|LOEPSF|Ley\s+50\/1997|Ley\s+19\/2013|Ley\s+29\/1998|LJCA|Ley\s+Org[áa]nica\s+6\/1985|LOPJ|Estatuto\s+de\s+Autonom[íi]a\s+de\s+Madrid|Ley\s+1\/1983|Ley\s+1\/1986|Ley\s+9\/1990)/gi;
+  const combinedRegex = /(Constituci[óo]n\s+Espa[ñn]ola(?:\s+de\s+1978)?|Ley\s+39\/2015|LPACAP|LPAC|Ley\s+40\/2015|LRJSP|TREBEP|EBEP|RDL\s+5\/2015|Real\s+Decreto\s+Legislativo\s+5\/2015|Real\s+Decreto\s+364\/1995|RD\s+364\/1995|Real\s+Decreto\s+365\/1995|RD\s+365\/1995|Real\s+Decreto\s+1708\/2011|RD\s+1708\/2011|Sistema\s+Espa[ñn]ol\s+de\s+Archivos|Ley\s+Org[áa]nica\s+3\/2018|LO\s+3\/2018|LOPDGDD|Ley\s+9\/2017|LCSP|Ley\s+47\/2003|LGP|Ley\s+Org[áa]nica\s+2\/2012|LO\s+2\/2012|Ley\s+2\/2012|LOEPSF|Ley\s+50\/1997|Ley\s+19\/2013|Ley\s+29\/1998|LJCA|Ley\s+Org[áa]nica\s+6\/1985|LOPJ|Estatuto\s+de\s+Autonom[íi]a\s+de\s+Madrid|Ley\s+1\/1983|Ley\s+1\/1986|Ley\s+9\/1990)/gi;
 
   const partes = texto.split(combinedRegex);
 

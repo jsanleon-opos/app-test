@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ExamenCompleto, CategoriaExamen, ConvocatoriaAmbito, ItemAlmacenDuda, PreguntaExamen } from './types';
+import {
+  ExamenCompleto,
+  CategoriaExamen,
+  ConvocatoriaAmbito,
+  ItemAlmacenDuda,
+  PreguntaExamen,
+  DocumentoBibliotecaItem,
+} from './types';
 import { AITestGenerator } from './components/AITestGenerator';
 import { SeccionSimulacroOficial } from './components/SeccionSimulacroOficial';
 import { OfficialJsonImporter } from './components/OfficialJsonImporter';
 import { GraficoEvolucionPT } from './components/GraficoEvolucionPT';
 import { SeccionAnaliticaKPIs } from './components/SeccionAnaliticaKPIs';
-import { AlmacenDudasView } from './components/AlmacenDudasView';
+import { SeccionBibliotecaView } from './components/SeccionBibliotecaView';
 import { ProgresoTematicoDiarioWidget } from './components/ProgresoTematicoDiarioWidget';
 import { SeccionTestPreguntasFalladas } from './components/SeccionTestPreguntasFalladas';
 import { SelectorLeyesEInformaticaModal } from './components/SelectorLeyesEInformaticaModal';
@@ -39,6 +46,10 @@ import {
   guardarEnLocalStorageSeguro,
   guardarRecursosArgumentacionDePregunta,
   obtenerRecursosArgumentacionDePregunta,
+  leerBibliotecaDocumentosDeLocalStorage,
+  guardarBibliotecaDocumentosEnLocalStorage,
+  leerSubtemasBibliotecaDeLocalStorage,
+  guardarSubtemasBibliotecaEnLocalStorage,
 } from './utils/jsonExamHelper';
 import { EXAMENES_PRECARGADOS_OFICIALES } from './constants/boeData';
 
@@ -54,7 +65,7 @@ export default function App() {
   // BASE DE DATOS 2: Historial de Pruebas Realizadas (intentos y sesiones completadas con resultado)
   const [historialPruebas, setHistorialPruebas] = useState<ExamenCompleto[]>([]);
 
-  // BASE DE DATOS 3: Almacén de dudas, comentarios, preguntas falladas y reglas mnemotécnicas
+  // BASE DE DATOS 3: Biblioteca — Pestaña 1 (Almacén de dudas) y Pestaña 2 (Base de datos de documentos y enlaces, sin archivos binarios)
   const [almacenDudas, setAlmacenDudas] = useState<ItemAlmacenDuda[]>(() => {
     try {
       const saved = localStorage.getItem('c1_almacen_dudas');
@@ -63,6 +74,14 @@ export default function App() {
       return [];
     }
   });
+
+  const [bibliotecaDocumentos, setBibliotecaDocumentos] = useState<DocumentoBibliotecaItem[]>(() =>
+    leerBibliotecaDocumentosDeLocalStorage()
+  );
+
+  const [subtemasBiblioteca, setSubtemasBiblioteca] = useState<string[]>(() =>
+    leerSubtemasBibliotecaDeLocalStorage()
+  );
 
   const [examenSeleccionadoParaTest, setExamenSeleccionadoParaTest] = useState<ExamenCompleto | null>(null);
   const [examenAEliminar, setExamenAEliminar] = useState<{ id: string; titulo: string; tipo: 'banco' | 'historial' } | null>(null);
@@ -612,7 +631,7 @@ export default function App() {
         guardarEnLocalStorageSeguro('c1_banco_examenes', nuevosBanco);
         guardarEnLocalStorageSeguro('c1_historial_pruebas', nuevosHistorial);
 
-        // Sincronizar también Almacén de Dudas si el fichero JSON importado incluía datos de dudas
+        // Sincronizar también Almacén de Dudas y Base de Datos de Documentos/Enlaces si el JSON los incluía
         try {
           const savedDudas = localStorage.getItem('c1_almacen_dudas');
           if (savedDudas) {
@@ -621,6 +640,8 @@ export default function App() {
               setAlmacenDudas(parsedDudas);
             }
           }
+          setBibliotecaDocumentos(leerBibliotecaDocumentosDeLocalStorage());
+          setSubtemasBiblioteca(leerSubtemasBibliotecaDeLocalStorage());
         } catch (_) {}
 
         mostrarToast(
@@ -647,10 +668,16 @@ export default function App() {
         if (Array.isArray(res.almacenDudas)) {
           setAlmacenDudas(res.almacenDudas);
         }
+        if (Array.isArray(res.bibliotecaDocumentos)) {
+          setBibliotecaDocumentos(res.bibliotecaDocumentos);
+        }
+        if (Array.isArray(res.subtemasBiblioteca)) {
+          setSubtemasBiblioteca(res.subtemasBiblioteca);
+        }
         guardarEnLocalStorageSeguro('c1_banco_examenes', res.bancoExamenes);
         guardarEnLocalStorageSeguro('c1_historial_pruebas', res.historialPruebas);
         mostrarToast(
-          `¡Copia restaurada con éxito! ${res.bancoExamenes.length} exámenes en el Banco, ${res.historialPruebas.length} pruebas en el Historial, ${res.almacenDudas?.length || 0} registros de Dudas y ${res.anotacionesRestauradas} notas recuperadas.`,
+          `¡Copia restaurada con éxito! ${res.bancoExamenes.length} exámenes en el Banco, ${res.historialPruebas.length} en Historial, ${res.almacenDudas?.length || 0} en Dudas y ${res.bibliotecaDocumentos?.length || 0} enlaces/documentos en Biblioteca.`,
           'exito'
         );
         setMostrarModalBackup(false);
@@ -1559,12 +1586,13 @@ export default function App() {
                   ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-xs border border-slate-200/80 dark:border-slate-600 font-black ring-1 ring-indigo-500/20'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-750'
               }`}
+              title="Biblioteca: 1. Almacén de Dudas y Notas + 2. Base de Datos de Documentos Locales y Enlaces Web"
             >
-              <i className="fa-solid fa-box-archive text-amber-500 text-xs"></i>
-              <span>Almacén de Dudas</span>
-              {almacenDudas.length > 0 && (
+              <i className="fa-solid fa-book-bookmark text-amber-500 text-xs"></i>
+              <span>Biblioteca</span>
+              {(almacenDudas.length > 0 || bibliotecaDocumentos.length > 0) && (
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold border border-amber-200 dark:border-amber-800">
-                  {almacenDudas.length}
+                  {almacenDudas.length + bibliotecaDocumentos.length}
                 </span>
               )}
             </button>
@@ -2758,15 +2786,25 @@ export default function App() {
           />
         )}
 
-        {/* TAB 6: ALMACÉN DE ESTUDIO, BANCO DE PREGUNTAS RELEVANTES Y REGLAS MNEMOTÉCNICAS */}
+        {/* TAB 6: BIBLIOTECA (1. ALMACÉN DE DUDAS + 2. BASE DE DATOS DE DOCUMENTOS Y ENLACES) */}
         {tabActiva === 'almacen_dudas' && (
-          <AlmacenDudasView
+          <SeccionBibliotecaView
             itemsDudas={almacenDudas}
-            onActualizarItems={(nuevosItems) => {
+            onActualizarItemsDudas={(nuevosItems) => {
               setAlmacenDudas(nuevosItems);
               try {
                 localStorage.setItem('c1_almacen_dudas', JSON.stringify(nuevosItems));
               } catch (_) {}
+            }}
+            documentosBiblioteca={bibliotecaDocumentos}
+            onActualizarDocumentosBiblioteca={(nuevosDocs) => {
+              setBibliotecaDocumentos(nuevosDocs);
+              guardarBibliotecaDocumentosEnLocalStorage(nuevosDocs);
+            }}
+            subtemasBiblioteca={subtemasBiblioteca}
+            onActualizarSubtemasBiblioteca={(nuevosSubtemas) => {
+              setSubtemasBiblioteca(nuevosSubtemas);
+              guardarSubtemasBibliotecaEnLocalStorage(nuevosSubtemas);
             }}
             onVerJustificacionPregunta={handleVerJustificacionPregunta}
             onNavegarATab={(tab: any) => setTabActiva(tab)}
@@ -2985,17 +3023,17 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Cuadro 4: Almacén de Dudas y Notas */}
+                {/* Cuadro 4: Biblioteca (Dudas + Documentos/Enlaces) */}
                 <div className="p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 text-center shadow-xs">
                   <div className="flex items-center justify-center gap-1 text-[9.5px] font-black uppercase text-emerald-800 dark:text-emerald-300 font-mono">
-                    <i className="fa-solid fa-box-archive text-[9px] text-emerald-600"></i>
-                    <span>Almacén</span>
+                    <i className="fa-solid fa-book-bookmark text-[9px] text-emerald-600"></i>
+                    <span>Biblioteca</span>
                   </div>
                   <span className="text-xl sm:text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block">
-                    {almacenDudas.length}
+                    {almacenDudas.length + bibliotecaDocumentos.length}
                   </span>
                   <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
-                    notas & conceptos
+                    {almacenDudas.length} dudas · {bibliotecaDocumentos.length} docs
                   </span>
                 </div>
               </div>
@@ -3011,19 +3049,27 @@ export default function App() {
                   <span>Descargar Copia de Seguridad Completa</span>
                 </div>
                 <span className="text-[9.5px] font-mono px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-300 dark:border-indigo-800">
-                  {bancoExamenes.length} tests · {totalPreguntasBanco} preg.
+                  {bancoExamenes.length} tests · {bibliotecaDocumentos.length} enlaces
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                Descarga un archivo <strong>.json estructurado v3.1</strong> con todos tus datos: Banco único de exámenes ({bancoExamenes.length} tests con {totalPreguntasBanco} preguntas), Historial ({historialPruebas.length} intentos) y Almacén de dudas ({almacenDudas.length} notas).
+                Descarga un archivo <strong>.json estructurado v3.2</strong> con todos tus datos: Banco de exámenes ({bancoExamenes.length} tests con {totalPreguntasBanco} preguntas), Historial ({historialPruebas.length} intentos), Almacén de dudas ({almacenDudas.length} notas) y Base de Datos de Enlaces/Documentos ({bibliotecaDocumentos.length} referencias y {subtemasBiblioteca.length} subtemas, sin archivos físicos).
               </p>
               <button
                 type="button"
-                onClick={() => descargarCopiaSeguridadCompleta(bancoExamenes, historialPruebas, almacenDudas)}
+                onClick={() =>
+                  descargarCopiaSeguridadCompleta(
+                    bancoExamenes,
+                    historialPruebas,
+                    almacenDudas,
+                    bibliotecaDocumentos,
+                    subtemasBiblioteca
+                  )
+                }
                 className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
               >
                 <i className="fa-solid fa-floppy-disk"></i>
-                <span>Guardar Copia de Seguridad v3.1 (.json)</span>
+                <span>Guardar Copia de Seguridad Integral (.json)</span>
               </button>
             </div>
 

@@ -3759,6 +3759,158 @@ export const PREGUNTAS_UNITARIAS_BOE: PreguntaExamen[] = [
       "fundamento": "Los puestos de trabajo adscritos a funcionarios de la Comunidad de Madrid se proveerán mediante concurso de méritos, que constituye el sistema normal de provisión."
     },
     "id": 101
+  },
+  {
+    "id": 102,
+    "enunciado": "Conforme al artículo 8 del Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos, atendiendo al ciclo vital de los documentos, ¿en qué clases se clasifican los archivos del Sistema de Archivos de la Administración General del Estado?",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "Archivos de oficina o de gestión, archivos generales o centrales de los Ministerios y organismos públicos, archivo intermedio y archivos históricos.",
+        "esCorrecta": true,
+        "explicacion": "El artículo 8 del RD 1708/2011 clasifica literalmente los archivos de la AGE en estas cuatro categorías según el ciclo vital de los documentos."
+      },
+      {
+        "id": "B",
+        "texto": "Únicamente en archivos provinciales y archivos municipales de depósito permanente.",
+        "esCorrecta": false,
+        "explicacion": "No se corresponde con las cuatro categorías del artículo 8 del RD 1708/2011."
+      },
+      {
+        "id": "C",
+        "texto": "Archivos secretos, archivos reservados y archivos de libre consulta telemática.",
+        "esCorrecta": false,
+        "explicacion": "Esa distinción se refiere al régimen de acceso o clasificación de seguridad, no al ciclo vital del art. 8."
+      },
+      {
+        "id": "D",
+        "texto": "Archivos primarios de registro y archivos secundarios de biblioteca ministerial.",
+        "esCorrecta": false,
+        "explicacion": "Terminología ajena al artículo 8 del RD 1708/2011."
+      }
+    ],
+    "leyesRelacionadas": ["RD 1708/2011 (Sistema Español de Archivos)"],
+    "justificacionLegal": {
+      "norma": "Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos",
+      "articulo": "Artículo 8",
+      "codigoBOE": "BOE-A-2011-18541",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541#a8",
+      "fundamento": "Atendiendo al ciclo vital de los documentos, los archivos del Sistema de Archivos de la Administración General del Estado se clasifican en: a) Archivos de oficina o de gestión; b) Archivos generales o centrales; c) Archivo intermedio; d) Archivos históricos."
+    }
+  },
+  {
+    "id": 103,
+    "enunciado": "De acuerdo con el artículo 9.2 del Real Decreto 1708/2011, con carácter general y salvo excepciones justificadas, ¿cuál es el plazo máximo de permanencia de los documentos en los archivos de oficina o de gestión antes de su transferencia al archivo central?",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "Cinco años desde que los procedimientos en los que fueron tramitados o las actuaciones hayan concluido.",
+        "esCorrecta": true,
+        "explicacion": "El art. 9.2 del RD 1708/2011 fija como regla general que los documentos permanecerán en los archivos de oficina un máximo de cinco años."
+      },
+      {
+        "id": "B",
+        "texto": "Quince años desde la fecha de incoación del expediente administrativo.",
+        "esCorrecta": false,
+        "explicacion": "Quince años corresponde al plazo de permanencia en los archivos centrales (art. 10), no en los de oficina."
+      },
+      {
+        "id": "C",
+        "texto": "Treinta años ininterrumpidos en la unidad tramitadora.",
+        "esCorrecta": false,
+        "explicacion": "Supera ampliamente el límite general de 5 años en archivo de gestión."
+      },
+      {
+        "id": "D",
+        "texto": "Seis meses naturales desde el asiento registral de entrada.",
+        "esCorrecta": false,
+        "explicacion": "El plazo general en archivo de oficina tras la conclusión del procedimiento es de cinco años."
+      }
+    ],
+    "leyesRelacionadas": ["RD 1708/2011 (Sistema Español de Archivos)"],
+    "justificacionLegal": {
+      "norma": "Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos",
+      "articulo": "Artículo 9.2",
+      "codigoBOE": "BOE-A-2011-18541",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541#a9",
+      "fundamento": "Con carácter general y salvo excepciones debidamente motivadas, el plazo máximo de permanencia de los documentos en los archivos de oficina o de gestión será de cinco años desde que los procedimientos hayan concluido."
+    }
+  },
+  {
+    "id": 104,
+    "enunciado": "Según el artículo 11 del Real Decreto 1708/2011, ¿qué institución ejerce las funciones de Archivo Intermedio de la Administración General del Estado?",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "El Archivo General de la Administración (AGA).",
+        "esCorrecta": true,
+        "explicacion": "El art. 11.2 del RD 1708/2011 establece expresamente que el Archivo General de la Administración es el archivo intermedio de la Administración General del Estado."
+      },
+      {
+        "id": "B",
+        "texto": "El Archivo Histórico Nacional de forma exclusiva para todos los ministerios.",
+        "esCorrecta": false,
+        "explicacion": "El Archivo Histórico Nacional es un archivo histórico (art. 12), no el archivo intermedio."
+      },
+      {
+        "id": "C",
+        "texto": "La Biblioteca Nacional de España.",
+        "esCorrecta": false,
+        "explicacion": "La Biblioteca Nacional no actúa como archivo intermedio de los expedientes administrativos de la AGE."
+      },
+      {
+        "id": "D",
+        "texto": "El Boletín Oficial del Estado (AEBOE).",
+        "esCorrecta": false,
+        "explicacion": "El archivo intermedio de la AGE es el Archivo General de la Administración (AGA)."
+      }
+    ],
+    "leyesRelacionadas": ["RD 1708/2011 (Sistema Español de Archivos)"],
+    "justificacionLegal": {
+      "norma": "Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos",
+      "articulo": "Artículo 11.2",
+      "codigoBOE": "BOE-A-2011-18541",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541#a11",
+      "fundamento": "El Archivo General de la Administración es el archivo intermedio de la Administración General del Estado, al que han de transferirse los documentos de los archivos centrales de los Departamentos ministeriales."
+    }
+  },
+  {
+    "id": 105,
+    "enunciado": "A tenor del artículo 30 del Real Decreto 1708/2011, ¿cuál es el plazo máximo para resolver y notificar una solicitud de acceso a documentos custodiados en archivos de la AGE y cuál es el sentido del silencio administrativo?",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "El plazo máximo es de un mes, y transcurrido dicho plazo sin haberse dictado resolución expresa, el interesado podrá entender desestimada su solicitud.",
+        "esCorrecta": true,
+        "explicacion": "El art. 30.1 y 30.3 del RD 1708/2011 fija el plazo máximo de un mes y el sentido desestimatorio del silencio en este procedimiento."
+      },
+      {
+        "id": "B",
+        "texto": "El plazo máximo es de diez días hábiles con silencio administrativo positivo.",
+        "esCorrecta": false,
+        "explicacion": "El plazo en el art. 30 del RD 1708/2011 es de un mes y el silencio es desestimatorio."
+      },
+      {
+        "id": "C",
+        "texto": "El plazo máximo es de seis meses con caducidad automática del archivo.",
+        "esCorrecta": false,
+        "explicacion": "El plazo legal es de un mes."
+      },
+      {
+        "id": "D",
+        "texto": "No existe plazo de resolución al ser un acto discrecional graciable.",
+        "esCorrecta": false,
+        "explicacion": "Está sujeto al plazo máximo de un mes y resolución motivada."
+      }
+    ],
+    "leyesRelacionadas": ["RD 1708/2011 (Sistema Español de Archivos)"],
+    "justificacionLegal": {
+      "norma": "Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos",
+      "articulo": "Artículo 30.1 y 30.3",
+      "codigoBOE": "BOE-A-2011-18541",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541#a30",
+      "fundamento": "Las solicitudes de acceso se resolverán en el plazo máximo de un mes. Transcurrido este plazo sin que se hubiera dictado y notificado resolución expresa, el interesado podrá entender desestimada su solicitud."
+    }
   }
 ];
 
@@ -5159,6 +5311,12 @@ function getNormaTagsDePregunta(p: PreguntaExamen): string[] {
   if (codigoBOE === 'BOE-A-1978-31229' || normaNorm.includes('constitucion') || normaNorm.includes('1978')) {
     tags.push('constitucion');
   }
+  if (codigoBOE === 'BOE-A-2011-18541' || normaNorm.includes('1708/2011') || normaNorm.includes('sistema espanol de archivos')) {
+    tags.push('1708/2011');
+  }
+  if (codigoBOE === 'BOE-A-2012-5730' || normaNorm.includes('2/2012') || normaNorm.includes('estabilidad presupuestaria')) {
+    tags.push('2/2012');
+  }
   if (
     codigoBOE === 'BOE-A-1983-34139' ||
     codigoBOE === 'BOE-A-1983-6317' ||
@@ -5249,6 +5407,12 @@ function identificarTagsSolicitados(leyesStr: string, tematicasStr: string): str
   }
   if (textoParaTags.includes('9/1990') || (tieneLeyesExplicitas && textoParaTags.includes('hacienda') && (textoParaTags.includes('madrid') || textoParaTags.includes('cam')))) {
     tags.push('9/1990');
+  }
+  if (textoParaTags.includes('1708/2011') || textoParaTags.includes('sistema espanol de archivos') || textoParaTags.includes('archivos')) {
+    tags.push('1708/2011');
+  }
+  if (textoParaTags.includes('2/2012') || textoParaTags.includes('loepsf') || textoParaTags.includes('estabilidad presupuestaria')) {
+    tags.push('2/2012');
   }
   if (!tieneLeyesExplicitas && (textoParaTags.includes('madrid') || textoParaTags.includes('cam'))) {
     tags.push('cam');
@@ -5526,6 +5690,8 @@ export function generarBancoPreguntasBOE(
     'asamblea': 'Reglamento de la Asamblea de Madrid (BOCM 1997)',
     '1/1986': 'Ley 1/1986 de la Función Pública de la Comunidad de Madrid (BOE-A-1986-13612)',
     '9/1990': 'Ley 9/1990 Reguladora de la Hacienda de la Comunidad de Madrid (BOE-A-1991-3837)',
+    '1708/2011': 'Real Decreto 1708/2011 Sistema Español de Archivos (BOE-A-2011-18541)',
+    '2/2012': 'Ley Orgánica 2/2012 de Estabilidad Presupuestaria y Sostenibilidad Financiera (BOE-A-2012-5730)',
     'cam': 'Legislación Autonómica de la Comunidad de Madrid (Estatuto, Gobierno y Asamblea)',
   };
 

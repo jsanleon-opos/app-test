@@ -325,6 +325,9 @@ export function deducirNormaOTemaDesdeTexto(texto: string): string | null {
   if (/\b(9\/2017|\blcsp\b|contratos del sector p[úu]blico|contrato menor|contrato de obras|contrato de suministros|contrato de servicios|mesa de contrataci[óo]n)\b/i.test(low)) {
     return 'Ley 9/2017, de 8 de noviembre, de Contratos del Sector Público (LCSP)';
   }
+  if (/\b(1708\/2011|sistema espa[ñn]ol de archivos|sistema de archivos de la administraci[óo]n general del estado|archivo general de la administraci[óo]n|comisi[óo]n superior calificadora de documentos administrativos|archivo de oficina|archivo intermedio)\b/i.test(low)) {
+    return 'Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos';
+  }
   if (/\b(203\/2021|actuaci[óo]n y funcionamiento del sector p[úu]blico por medios electr[óo]nicos)\b/i.test(low)) {
     return 'Real Decreto 203/2021: Reglamento de actuación del sector público por medios electrónicos';
   }
@@ -595,9 +598,9 @@ export function clasificarPreguntaEnCategoriaTemario(
     return 'regimen_sector_publico';
   }
 
-  // Procedimiento Administrativo Común (Ley 39/2015 y RD 203/2021)
+  // Procedimiento Administrativo Común (Ley 39/2015, RD 203/2021 y RD 1708/2011 de Archivos)
   if (
-    /\b(39\/2015|lpacap|203\/2021|311\/2022|4\/2010|procedimiento administrativo com[úu]n|acto administrativo|silencio administrativo|recurso de alzada|recurso potestativo de reposici[óo]n|recurso extraordinario de revisi[óo]n|revisi[óo]n de oficio|lesividad|nulidad de pleno derecho|anulabilidad|notificaci[óo]n|c[óo]mputo de plazos|interesados|ejecuci[óo]n forzosa|apremio sobre el patrimonio)\b/i.test(
+    /\b(39\/2015|lpacap|203\/2021|1708\/2011|sistema espa[ñn]ol de archivos|archivo general de la administraci[óo]n|311\/2022|4\/2010|procedimiento administrativo com[úu]n|acto administrativo|silencio administrativo|recurso de alzada|recurso potestativo de reposici[óo]n|recurso extraordinario de revisi[óo]n|revisi[óo]n de oficio|lesividad|nulidad de pleno derecho|anulabilidad|notificaci[óo]n|c[óo]mputo de plazos|interesados|ejecuci[óo]n forzosa|apremio sobre el patrimonio)\b/i.test(
       textoPrioritario
     )
   ) {
@@ -803,6 +806,9 @@ export function normalizarNombreLey(raw: string): string {
   // 2. LEGISLACIÓN OFICIAL BOE
   if (low.includes('constitución') || low.includes('constitucion') || low.includes('ce 1978') || low === 'ce') {
     return 'Constitución Española de 1978';
+  }
+  if (low.includes('1708/2011') || low.includes('sistema español de archivos') || low.includes('sistema espanol de archivos') || low.includes('sistema de archivos')) {
+    return 'RD 1708/2011 (Sistema Español de Archivos)';
   }
   if (low.includes('203/2021')) {
     return 'RD 203/2021 (Admin. Electrónica)';

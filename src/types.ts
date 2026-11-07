@@ -251,6 +251,25 @@ export interface ConvocatoriaCorteC1 {
   observaciones: string;
 }
 
+export interface DocumentoBibliotecaItem {
+  id: string;
+  titulo: string;
+  tipoEnlace: 'web_externa' | 'documento_local';
+  /** URL externa (https://...) o ruta/enlace al documento local (ej. C:\..., /Users/..., file:///...) — NUNCA contenido binario del archivo */
+  enlaceORuta: string;
+  nombreArchivoReferencia?: string;
+  formatoDocumento?: string; // Ej: "PDF", "DOCX", "XLSX", "Web BOE", "Esquema", etc.
+  descripcion?: string;
+  ambito: ConvocatoriaAmbito; // 'AGE' | 'CAM' | 'AMBOS'
+  temasAgeC1: string[]; // Etiquetas de temas del temario AGE C1
+  temasCamC1: string[]; // Etiquetas de temas del temario CAM C1
+  leyesYDecretos: string[]; // Etiquetas de leyes, reales decretos, etc. (ej. RD 1708/2011 de archivos)
+  subtemas: string[]; // Subtemas asignados al documento o enlace
+  destacado?: boolean;
+  fechaCreacion: string;
+  fechaActualizacion?: string;
+}
+
 // Estructura para importar/exportar exámenes oficiales en formato JSON
 export interface FormatoExamenJSONOficial {
   id?: string;
@@ -307,7 +326,10 @@ export interface FormatoExamenJSONOficial {
     timestamp: string;
   }[];
   resultado?: ResultadoExamen;
-  // Datos de la sección Almacén de Dudas y recursos de argumentación incluidos en la exportación JSON
+  // Datos de la sección Biblioteca (Almacén de Dudas + Base de Datos de Documentos/Enlaces sin archivos binarios) y recursos de argumentación incluidos en la exportación JSON
   almacenDudas?: ItemAlmacenDuda[];
+  bibliotecaDocumentos?: DocumentoBibliotecaItem[];
+  subtemasBiblioteca?: string[];
   recursosArgumentacionPorPregunta?: Record<string, RecursoArgumentacionPregunta[]>;
 }
+

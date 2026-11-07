@@ -4,6 +4,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { generarBancoPreguntasBOE, calcularHuellaPregunta, generarCodigoInedita } from './src/constants/boeQuestionsBank';
 import { balancearYDistribuirOpciones } from './src/utils/examBalancing';
@@ -1262,6 +1263,65 @@ ${caseText.trim()}
     success: true,
     examen: examenAlineado,
   });
+});
+
+// Endpoint para abrir un documento local con su programa asociado del sistema operativo (cuando el servidor corre en la máquina local)
+app.post('/api/open-local-file', (req, res) => {
+  try {
+    const rawPath = String(req.body?.filePath || '').trim();
+    if (!rawPath) {
+      return res.status(400).json({ openedOnHost: false, error: 'Ruta vacía' });
+    }
+
+    // Convertir file:///C:/... a ruta nativa si procede
+    let cleanPath = rawPath;
+    if (/^file:\/\//i.test(cleanPath)) {
+      try {
+        cleanPath = fileURLToPath(cleanPath);
+      } catch (_) {
+        cleanPath = decodeURIComponent(cleanPath.replace(/^file:\/\/\/?/i, ''));
+      }
+    }
+
+    if (!fs.existsSync(cleanPath)) {
+      return res.json({
+        openedOnHost: false,
+        reason: 'not_found_on_server_host',
+      });
+    }
+
+    const platform = process.platform;
+    if (platform === 'win32') {
+      const child = spawn('cmd', ['/c', 'start', '', cleanPath], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      child.unref();
+    } else if (platform === 'darwin') {
+      const child = spawn('open', [cleanPath], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+    } else {
+      const child = spawn('xdg-open', [cleanPath], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+    }
+
+    return res.json({
+      openedOnHost: true,
+      path: cleanPath,
+    });
+  } catch (err: any) {
+    return res.json({
+      openedOnHost: false,
+      error: err?.message || 'No se pudo invocar el programa asociado en el host',
+    });
+  }
 });
 
 // Health check endpoint

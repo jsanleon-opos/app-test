@@ -159,6 +159,13 @@ export const TEMATICAS_NORMATIVAS: TematicaInfo[] = [
         urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2018-16673',
         ambito: 'AMBOS',
       },
+      {
+        idBOE: 'BOE-A-2011-18541',
+        nombre: 'Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos y se regula el Sistema de Archivos de la Administración General del Estado y de sus Organismos Públicos y su régimen de acceso',
+        sigla: 'RD 1708/2011 Archivos',
+        urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541',
+        ambito: 'AGE',
+      },
     ],
   },
   {

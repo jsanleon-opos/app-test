@@ -194,6 +194,16 @@ export const CATALOGO_LEGISLACION_C1_AGE: ItemNormativaOTemario[] = [
     idBOE: 'BOE-A-2005-14478',
   },
   {
+    id: 'rd-1708-2011-archivos',
+    nombre: 'Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos y se regula el Sistema de Archivos de la Administración General del Estado y de sus Organismos Públicos y su régimen de acceso',
+    sigla: 'RD 1708/2011 (Sistema Español de Archivos)',
+    tipo: 'legislacion_age',
+    grupo: 'Archivos y Documentación Administrativa',
+    descripcionBreve: 'Sistema Español de Archivos, clases de archivos de la AGE (de oficina o gestión, centrales, intermedio —AGA— e históricos), transferencias documentales, Comisión Superior Calificadora de Documentos Administrativos y procedimiento de acceso.',
+    urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541',
+    idBOE: 'BOE-A-2011-18541',
+  },
+  {
     id: 'ljca-29-1998',
     nombre: 'Ley 29/1998, de 13 de julio, reguladora de la Jurisdicción Contencioso-administrativa (LJCA)',
     sigla: 'LJCA (Ley 29/1998)',

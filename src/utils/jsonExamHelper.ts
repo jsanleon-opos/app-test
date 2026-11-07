@@ -12,6 +12,7 @@ import {
   ConvocatoriaAmbito,
   ItemAlmacenDuda,
   RecursoArgumentacionPregunta,
+  DocumentoBibliotecaItem,
 } from '../types';
 import {
   esNormaGenerica,
@@ -19,8 +20,143 @@ import {
   deducirNormaOTemaDesdeTexto,
   obtenerReferenciaConvocatoriaOficial,
 } from './tematicaClassifier';
+import {
+  DOCUMENTOS_INICIALES_BIBLIOTECA,
+  SUBTEMAS_PREDEFINIDOS_BIBLIOTECA,
+} from '../constants/catalogoBibliotecaDocumentos';
 
 const STORAGE_KEY_RECURSOS_ARGUMENTACION = 'c1_recursos_argumentacion_preguntas';
+const STORAGE_KEY_BIBLIOTECA_DOCUMENTOS = 'c1_biblioteca_documentos';
+const STORAGE_KEY_BIBLIOTECA_SUBTEMAS = 'c1_biblioteca_subtemas';
+
+/**
+ * Sanitiza un registro de la Base de Datos de Documentos de Biblioteca para garantizar
+ * estrictamente que NUNCA se almacene el contenido binario/base64 de ningún archivo
+ * ni en la aplicación ni en la copia de seguridad JSON (únicamente enlaces web o rutas/referencias locales).
+ */
+export function sanitizarDocumentoBibliotecaSinBinarios(
+  doc: Partial<DocumentoBibliotecaItem>
+): DocumentoBibliotecaItem {
+  let enlaceLimpio = (doc.enlaceORuta || '').trim();
+  if (enlaceLimpio.startsWith('data:')) {
+    // Eliminar cualquier contenido binario incrustado dejando solo el nombre o ruta de referencia
+    enlaceLimpio = doc.nombreArchivoReferencia
+      ? `Documento local: ${doc.nombreArchivoReferencia}`
+      : 'Referencia a documento local (sin archivo almacenado)';
+  }
+  return {
+    id: doc.id || `doc-bib-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    titulo: (doc.titulo || 'Documento / Enlace de referencia').trim(),
+    tipoEnlace: doc.tipoEnlace === 'documento_local' ? 'documento_local' : 'web_externa',
+    enlaceORuta: enlaceLimpio,
+    nombreArchivoReferencia: doc.nombreArchivoReferencia,
+    formatoDocumento: doc.formatoDocumento,
+    descripcion: doc.descripcion || '',
+    ambito: doc.ambito === 'CAM' ? 'CAM' : doc.ambito === 'AMBOS' ? 'AMBOS' : 'AGE',
+    temasAgeC1: Array.isArray(doc.temasAgeC1) ? doc.temasAgeC1 : [],
+    temasCamC1: Array.isArray(doc.temasCamC1) ? doc.temasCamC1 : [],
+    leyesYDecretos: Array.isArray(doc.leyesYDecretos) ? doc.leyesYDecretos : [],
+    subtemas: Array.isArray(doc.subtemas) ? doc.subtemas : [],
+    destacado: Boolean(doc.destacado),
+    fechaCreacion: doc.fechaCreacion || new Date().toISOString(),
+    fechaActualizacion: doc.fechaActualizacion,
+  };
+}
+
+export function leerBibliotecaDocumentosDeLocalStorage(): DocumentoBibliotecaItem[] {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return DOCUMENTOS_INICIALES_BIBLIOTECA;
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_BIBLIOTECA_DOCUMENTOS);
+    if (!raw) {
+      guardarEnLocalStorageSeguro(STORAGE_KEY_BIBLIOTECA_DOCUMENTOS, DOCUMENTOS_INICIALES_BIBLIOTECA);
+      return DOCUMENTOS_INICIALES_BIBLIOTECA;
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((d) => sanitizarDocumentoBibliotecaSinBinarios(d));
+    }
+    return DOCUMENTOS_INICIALES_BIBLIOTECA;
+  } catch (_) {
+    return DOCUMENTOS_INICIALES_BIBLIOTECA;
+  }
+}
+
+export function guardarBibliotecaDocumentosEnLocalStorage(
+  docs: DocumentoBibliotecaItem[]
+): DocumentoBibliotecaItem[] {
+  const limpios = (docs || []).map((d) => sanitizarDocumentoBibliotecaSinBinarios(d));
+  guardarEnLocalStorageSeguro(STORAGE_KEY_BIBLIOTECA_DOCUMENTOS, limpios);
+  return limpios;
+}
+
+export function fusionarBibliotecaDocumentosEnLocalStorage(
+  nuevosDocs?: DocumentoBibliotecaItem[]
+): DocumentoBibliotecaItem[] {
+  const existentes = leerBibliotecaDocumentosDeLocalStorage();
+  if (!Array.isArray(nuevosDocs) || nuevosDocs.length === 0) {
+    return existentes;
+  }
+  const mapa = new Map<string, DocumentoBibliotecaItem>();
+  existentes.forEach((doc) => {
+    if (doc && doc.id) {
+      mapa.set(doc.id, sanitizarDocumentoBibliotecaSinBinarios(doc));
+    }
+  });
+  nuevosDocs.forEach((doc) => {
+    if (doc && (doc.id || doc.titulo || doc.enlaceORuta)) {
+      const limpio = sanitizarDocumentoBibliotecaSinBinarios(doc);
+      mapa.set(limpio.id, limpio);
+    }
+  });
+  const resultado = Array.from(mapa.values());
+  guardarEnLocalStorageSeguro(STORAGE_KEY_BIBLIOTECA_DOCUMENTOS, resultado);
+  return resultado;
+}
+
+export function leerSubtemasBibliotecaDeLocalStorage(): string[] {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return SUBTEMAS_PREDEFINIDOS_BIBLIOTECA;
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_BIBLIOTECA_SUBTEMAS);
+    if (!raw) {
+      guardarEnLocalStorageSeguro(STORAGE_KEY_BIBLIOTECA_SUBTEMAS, SUBTEMAS_PREDEFINIDOS_BIBLIOTECA);
+      return SUBTEMAS_PREDEFINIDOS_BIBLIOTECA;
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      const combinados = Array.from(
+        new Set([...SUBTEMAS_PREDEFINIDOS_BIBLIOTECA, ...parsed.filter((s) => typeof s === 'string' && s.trim())])
+      );
+      return combinados;
+    }
+    return SUBTEMAS_PREDEFINIDOS_BIBLIOTECA;
+  } catch (_) {
+    return SUBTEMAS_PREDEFINIDOS_BIBLIOTECA;
+  }
+}
+
+export function guardarSubtemasBibliotecaEnLocalStorage(subtemas: string[]): string[] {
+  const limpios = Array.from(
+    new Set(
+      [...SUBTEMAS_PREDEFINIDOS_BIBLIOTECA, ...(subtemas || [])]
+        .map((s) => (s || '').trim())
+        .filter(Boolean)
+    )
+  );
+  guardarEnLocalStorageSeguro(STORAGE_KEY_BIBLIOTECA_SUBTEMAS, limpios);
+  return limpios;
+}
+
+export function fusionarSubtemasBibliotecaEnLocalStorage(nuevosSubtemas?: string[]): string[] {
+  const actuales = leerSubtemasBibliotecaDeLocalStorage();
+  if (!Array.isArray(nuevosSubtemas) || nuevosSubtemas.length === 0) {
+    return actuales;
+  }
+  return guardarSubtemasBibliotecaEnLocalStorage([...actuales, ...nuevosSubtemas]);
+}
 
 export function normalizarClaveRecursoPregunta(enunciado?: string): string {
   return (enunciado || '')
@@ -267,6 +403,12 @@ export function validarYConvertirJSON(obj: any): ExamenCompleto {
 
   if (Array.isArray(obj.almacenDudas) && obj.almacenDudas.length > 0) {
     fusionarAlmacenDudasEnLocalStorage(obj.almacenDudas);
+  }
+  if (Array.isArray(obj.bibliotecaDocumentos) && obj.bibliotecaDocumentos.length > 0) {
+    fusionarBibliotecaDocumentosEnLocalStorage(obj.bibliotecaDocumentos);
+  }
+  if (Array.isArray(obj.subtemasBiblioteca) && obj.subtemasBiblioteca.length > 0) {
+    fusionarSubtemasBibliotecaEnLocalStorage(obj.subtemasBiblioteca);
   }
 
   // Título
@@ -995,6 +1137,22 @@ function detectarFundamentacionLegal(
       codigoBOE: 'BOE-A-2013-12887',
       urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2013-12887',
       fundamento: explicacionAdicional || 'Fundamentado en la Ley 19/2013 de Transparencia del BOE.',
+    };
+  }
+
+  if (
+    combinado.includes('1708/2011') ||
+    combinado.includes('sistema español de archivos') ||
+    combinado.includes('archivo general de la administración')
+  ) {
+    return {
+      norma: 'Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos',
+      articulo,
+      codigoBOE: 'BOE-A-2011-18541',
+      urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541',
+      fundamento:
+        explicacionAdicional ||
+        'Fundamentado en el Real Decreto 1708/2011 del Sistema Español de Archivos (BOE).',
     };
   }
 
@@ -3063,6 +3221,8 @@ export async function exportarExamenAJSON(
     })),
     resultado: examen.resultado,
     almacenDudas: almacenDudasEnriquecido,
+    bibliotecaDocumentos: leerBibliotecaDocumentosDeLocalStorage(),
+    subtemasBiblioteca: leerSubtemasBibliotecaDeLocalStorage(),
     recursosArgumentacionPorPregunta: leerMapaRecursosArgumentacionGlobal(),
   };
 
@@ -3077,7 +3237,7 @@ export async function exportarExamenAJSON(
 
 /**
  * Exporta la biblioteca completa de exámenes guardados junto con los enlaces/ficheros de argumentación
- * y los datos del Almacén de Dudas permitiendo elegir la carpeta de destino
+ * y los datos de la sección Biblioteca (Dudas + Documentos/Enlaces sin archivos binarios) permitiendo elegir la carpeta de destino
  */
 export async function exportarBibliotecaAJSON(
   examenes: ExamenCompleto[],
@@ -3105,6 +3265,8 @@ export async function exportarBibliotecaAJSON(
     ...(idx === 0
       ? {
           almacenDudas,
+          bibliotecaDocumentos: leerBibliotecaDocumentosDeLocalStorage(),
+          subtemasBiblioteca: leerSubtemasBibliotecaDeLocalStorage(),
           recursosArgumentacionPorPregunta: leerMapaRecursosArgumentacionGlobal(),
         }
       : {}),
@@ -3125,6 +3287,8 @@ export interface CopiaSeguridadIntegral {
     totalExamenes?: number;
     totalAnotaciones: number;
     totalDudasAlmacen?: number;
+    totalDocumentosBiblioteca?: number;
+    totalSubtemasBiblioteca?: number;
     totalRecursosArgumentacion?: number;
     timestamp: number;
   };
@@ -3133,6 +3297,9 @@ export interface CopiaSeguridadIntegral {
   examenesGuardados?: ExamenCompleto[];
   anotacionesPorExamen: Record<string, any[]>;
   almacenDudas?: ItemAlmacenDuda[];
+  /** Base de datos de enlaces a documentos locales o webs externas (NUNCA almacena archivos binarios) */
+  bibliotecaDocumentos?: DocumentoBibliotecaItem[];
+  subtemasBiblioteca?: string[];
   recursosArgumentacionPorPregunta?: Record<string, RecursoArgumentacionPregunta[]>;
   configuracion: {
     darkMode?: boolean;
@@ -3143,11 +3310,14 @@ export interface CopiaSeguridadIntegral {
 /**
  * Genera y guarda un archivo JSON con la Copia de Seguridad Integral
  * permitiendo elegir en qué carpeta guardarla.
+ * Incluye todo (Banco, Historial, Dudas, Enlaces/Etiquetas/Subtemas de Documentos de Biblioteca) SALVO los archivos físicos.
  */
 export async function descargarCopiaSeguridadCompleta(
   bancoOExamenes: ExamenCompleto[],
   historialOpcional?: ExamenCompleto[],
-  almacenDudasOpcional?: ItemAlmacenDuda[]
+  almacenDudasOpcional?: ItemAlmacenDuda[],
+  bibliotecaDocumentosOpcional?: DocumentoBibliotecaItem[],
+  subtemasBibliotecaOpcional?: string[]
 ): Promise<boolean> {
   const enriquecerExamenConRecursos = (ex: ExamenCompleto): ExamenCompleto => ({
     ...ex,
@@ -3213,6 +3383,18 @@ export async function descargarCopiaSeguridadCompleta(
     return rec.length > 0 ? { ...it, recursosArgumentacion: rec } : it;
   });
 
+  // Recopilar enlaces y metadatos de la Base de Datos de Documentos de Biblioteca (estrictamente sin archivos binarios)
+  const bibliotecaDocumentos = (
+    bibliotecaDocumentosOpcional && bibliotecaDocumentosOpcional.length > 0
+      ? bibliotecaDocumentosOpcional
+      : leerBibliotecaDocumentosDeLocalStorage()
+  ).map((d) => sanitizarDocumentoBibliotecaSinBinarios(d));
+
+  const subtemasBiblioteca =
+    subtemasBibliotecaOpcional && subtemasBibliotecaOpcional.length > 0
+      ? guardarSubtemasBibliotecaEnLocalStorage(subtemasBibliotecaOpcional)
+      : leerSubtemasBibliotecaDeLocalStorage();
+
   const recursosArgumentacionPorPregunta = leerMapaRecursosArgumentacionGlobal();
   const totalRecursosArgumentacion = Object.values(recursosArgumentacionPorPregunta).reduce(
     (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
@@ -3232,6 +3414,8 @@ export async function descargarCopiaSeguridadCompleta(
       totalExamenes: bancoExamenes.length + historialPruebas.length,
       totalAnotaciones,
       totalDudasAlmacen: almacenDudasEnriquecido.length,
+      totalDocumentosBiblioteca: bibliotecaDocumentos.length,
+      totalSubtemasBiblioteca: subtemasBiblioteca.length,
       totalRecursosArgumentacion,
       timestamp: Date.now(),
     },
@@ -3240,6 +3424,8 @@ export async function descargarCopiaSeguridadCompleta(
     examenesGuardados: [...bancoExamenes, ...historialPruebas],
     anotacionesPorExamen,
     almacenDudas: almacenDudasEnriquecido,
+    bibliotecaDocumentos,
+    subtemasBiblioteca,
     recursosArgumentacionPorPregunta,
     configuracion: {
       darkMode,
@@ -3262,6 +3448,8 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
   historialPruebas: ExamenCompleto[];
   examenes: ExamenCompleto[];
   almacenDudas: ItemAlmacenDuda[];
+  bibliotecaDocumentos: DocumentoBibliotecaItem[];
+  subtemasBiblioteca: string[];
   anotacionesRestauradas: number;
 } {
   const cleaned = limpiarTextoJSON(rawText);
@@ -3344,12 +3532,22 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
     } else {
       bancoExamenes = [unExamen];
     }
+  } else if (Array.isArray(parsed.bibliotecaDocumentos) || Array.isArray(parsed.almacenDudas)) {
+    // Caso E: Archivo JSON específico de Biblioteca (Documentos o Dudas)
   } else {
     throw new Error('El archivo no tiene la estructura de una copia de seguridad ni de examen oficial.');
   }
 
   const almacenDudasRestauradas = fusionarAlmacenDudasEnLocalStorage(
     Array.isArray(parsed.almacenDudas) ? parsed.almacenDudas : undefined
+  );
+
+  const bibliotecaDocumentosRestaurados = fusionarBibliotecaDocumentosEnLocalStorage(
+    Array.isArray(parsed.bibliotecaDocumentos) ? parsed.bibliotecaDocumentos : undefined
+  );
+
+  const subtemasBibliotecaRestaurados = fusionarSubtemasBibliotecaEnLocalStorage(
+    Array.isArray(parsed.subtemasBiblioteca) ? parsed.subtemasBiblioteca : undefined
   );
 
   // Guardar anotaciones internas de los exámenes
@@ -3365,6 +3563,8 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
     historialPruebas,
     examenes: [...bancoExamenes, ...historialPruebas],
     almacenDudas: almacenDudasRestauradas,
+    bibliotecaDocumentos: bibliotecaDocumentosRestaurados,
+    subtemasBiblioteca: subtemasBibliotecaRestaurados,
     anotacionesRestauradas: anotacionesCount,
   };
 }
