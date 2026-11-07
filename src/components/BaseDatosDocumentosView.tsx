@@ -6,8 +6,6 @@ import {
   CATALOGO_LEYES_REALES_DECRETOS_BIBLIOTECA,
 } from '../constants/catalogoBibliotecaDocumentos';
 import {
-  guardarArchivoConSelectorCarpeta,
-  limpiarTextoJSON,
   sanitizarDocumentoBibliotecaSinBinarios,
 } from '../utils/jsonExamHelper';
 import { obtenerUrlBOEParaNorma } from '../utils/boeUrlHelper';
@@ -815,92 +813,6 @@ export const BaseDatosDocumentosView: React.FC<BaseDatosDocumentosViewProps> = (
     }
   };
 
-  // Exportar únicamente las referencias de la Base de Datos Documental (sin archivos binarios)
-  const handleExportarBaseDatosJSON = async () => {
-    const payload = {
-      version: '3.2',
-      tipoExportacion: 'BaseDatosDocumentosEnlacesBibliotecaC1',
-      avisoPrivacidad:
-        'Este fichero contiene exclusivamente enlaces web, rutas de referencia local, etiquetas de temas AGE/CAM, leyes y subtemas. No almacena archivos binarios.',
-      fechaExportacion: new Date().toISOString(),
-      subtemasBiblioteca: todosLosSubtemas,
-      bibliotecaDocumentos: documentos
-        .map((d) => sanitizarDocumentoBibliotecaSinBinarios(d))
-        .filter((d): d is DocumentoBibliotecaItem => d !== null),
-    };
-    const fecha = new Date().toISOString().split('T')[0];
-    await guardarArchivoConSelectorCarpeta(
-      JSON.stringify(payload, null, 2),
-      `Biblioteca_Enlaces_Y_Documentos_C1_${fecha}.json`,
-      'application/json',
-      '.json'
-    );
-    mostrarNotificacion('Base de datos de enlaces y etiquetas exportada a JSON', 'exito');
-  };
-
-  // Importar referencias de un archivo JSON
-  const handleImportarBaseDatosJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const raw = typeof ev.target?.result === 'string' ? ev.target.result : '';
-        const parsed = JSON.parse(limpiarTextoJSON(raw));
-        let docsEntrantes: any[] = [];
-        let subtemasEntrantes: string[] = [];
-
-        if (Array.isArray(parsed)) {
-          if (parsed.length > 0 && Array.isArray(parsed[0]?.bibliotecaDocumentos)) {
-            docsEntrantes = parsed[0].bibliotecaDocumentos;
-            if (Array.isArray(parsed[0]?.subtemasBiblioteca)) {
-              subtemasEntrantes = parsed[0].subtemasBiblioteca;
-            }
-          } else {
-            docsEntrantes = parsed;
-          }
-        } else if (parsed && typeof parsed === 'object') {
-          if (Array.isArray(parsed.bibliotecaDocumentos)) {
-            docsEntrantes = parsed.bibliotecaDocumentos;
-          }
-          if (Array.isArray(parsed.subtemasBiblioteca)) {
-            subtemasEntrantes = parsed.subtemasBiblioteca;
-          }
-        }
-
-        const sanitizados = docsEntrantes
-          .map((d) => sanitizarDocumentoBibliotecaSinBinarios(d))
-          .filter((d): d is DocumentoBibliotecaItem => d !== null);
-
-        if (sanitizados.length === 0 && subtemasEntrantes.length === 0) {
-          mostrarNotificacion('El archivo JSON no contiene registros de documentos o enlaces válidos.', 'error');
-          return;
-        }
-
-        if (sanitizados.length > 0) {
-          const mapa = new Map<string, DocumentoBibliotecaItem>();
-          documentos.forEach((d) => mapa.set(d.id, d));
-          sanitizados.forEach((d) => mapa.set(d.id, d));
-          onActualizarDocumentos(Array.from(mapa.values()));
-        }
-
-        if (subtemasEntrantes.length > 0) {
-          const nuevoSet = new Set([
-            ...todosLosSubtemas,
-            ...subtemasEntrantes.map((s) => String(s).trim()).filter(Boolean),
-          ]);
-          onActualizarSubtemas(Array.from(nuevoSet));
-        }
-
-        mostrarNotificacion(`Se han importado ${sanitizados.length} documentos/enlaces y sus etiquetas.`, 'exito');
-      } catch (_) {
-        mostrarNotificacion('Error al leer el archivo JSON de documentos.', 'error');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   const hayFiltrosActivos =
     busqueda.trim() !== '' ||
     filtroTipoEnlace !== 'todos' ||
@@ -1081,14 +993,6 @@ export const BaseDatosDocumentosView: React.FC<BaseDatosDocumentosViewProps> = (
 
           {/* Botones de Acción Principales + Toggle Vista Listado / Tarjetas */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <input
-              id="importar-bd-documentos-json"
-              type="file"
-              accept=".json"
-              onChange={handleImportarBaseDatosJSON}
-              className="hidden"
-            />
-
             {/* Selector Vista: Listado vs Tarjetas (idéntico a Historial y Banco de Exámenes) */}
             <div className="flex items-center bg-slate-100 dark:bg-slate-700/60 p-0.5 rounded-xl border border-slate-200 dark:border-slate-600">
               <button
@@ -1145,26 +1049,6 @@ export const BaseDatosDocumentosView: React.FC<BaseDatosDocumentosViewProps> = (
             >
               <i className="fa-solid fa-sitemap text-[11px] text-amber-600"></i>
               <span>Subtemas ({todosLosSubtemas.length})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => document.getElementById('importar-bd-documentos-json')?.click()}
-              className="py-2 px-3 bg-white dark:bg-slate-800 hover:bg-slate-50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Importar referencias de documentos y etiquetas desde JSON"
-            >
-              <i className="fa-solid fa-file-import text-[11px] text-emerald-500"></i>
-              <span>Importar JSON</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportarBaseDatosJSON}
-              className="py-2 px-3 bg-white dark:bg-slate-800 hover:bg-slate-50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Exportar catálogo de enlaces, rutas locales, leyes, temas y subtemas en JSON"
-            >
-              <i className="fa-solid fa-download text-[11px] text-indigo-500"></i>
-              <span>Exportar JSON</span>
             </button>
           </div>
         </div>

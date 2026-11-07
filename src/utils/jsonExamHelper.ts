@@ -3290,6 +3290,7 @@ export interface CopiaSeguridadIntegral {
     totalDocumentosBiblioteca?: number;
     totalSubtemasBiblioteca?: number;
     totalRecursosArgumentacion?: number;
+    totalPreguntasControlFalladas?: number;
     timestamp: number;
   };
   bancoExamenes: ExamenCompleto[];
@@ -3301,16 +3302,29 @@ export interface CopiaSeguridadIntegral {
   bibliotecaDocumentos?: DocumentoBibliotecaItem[];
   subtemasBiblioteca?: string[];
   recursosArgumentacionPorPregunta?: Record<string, RecursoArgumentacionPregunta[]>;
+  controlPreguntasSuperadas?: Record<string, any>;
+  examenesEliminadosIds?: string[];
+  historialPreguntasRecientes?: string[];
   configuracion: {
     darkMode?: boolean;
+    autoAvanceAlFinal?: boolean;
+    cortePropioTest?: string;
+    cortePropioSupuesto?: string;
+    usarCortePropio?: boolean;
     geminiApiKey?: string;
   };
 }
 
 /**
- * Genera y guarda un archivo JSON con la Copia de Seguridad Integral
+ * Genera y guarda un archivo JSON con la Copia de Seguridad Integral Única
  * permitiendo elegir en qué carpeta guardarla.
- * Incluye todo (Banco, Historial, Dudas, Enlaces/Etiquetas/Subtemas de Documentos de Biblioteca) SALVO los archivos físicos.
+ * Incluye TODOS los aspectos de la app:
+ * - Banco de Exámenes (Tests y Supuestos)
+ * - Historial de Pruebas realizadas
+ * - Biblioteca: Almacén de Dudas y Notas + Base de Datos de Documentos y Enlaces (sin archivos físicos) + Subtemas
+ * - Recursos de Argumentación por pregunta (enlaces y rutas locales en justificaciones)
+ * - Anotaciones y subrayados por examen
+ * - Registro de control de preguntas falladas/superadas, historial anti-repetición y preferencias/cortes propios
  */
 export async function descargarCopiaSeguridadCompleta(
   bancoOExamenes: ExamenCompleto[],
@@ -3388,7 +3402,9 @@ export async function descargarCopiaSeguridadCompleta(
     bibliotecaDocumentosOpcional && bibliotecaDocumentosOpcional.length > 0
       ? bibliotecaDocumentosOpcional
       : leerBibliotecaDocumentosDeLocalStorage()
-  ).map((d) => sanitizarDocumentoBibliotecaSinBinarios(d));
+  )
+    .map((d) => sanitizarDocumentoBibliotecaSinBinarios(d))
+    .filter((d): d is DocumentoBibliotecaItem => d !== null);
 
   const subtemasBiblioteca =
     subtemasBibliotecaOpcional && subtemasBibliotecaOpcional.length > 0
@@ -3401,7 +3417,44 @@ export async function descargarCopiaSeguridadCompleta(
     0
   );
 
+  // Recopilar control de preguntas superadas/falladas
+  let controlPreguntasSuperadas: Record<string, any> = {};
+  try {
+    const rawSuperadas = localStorage.getItem('c1_preguntas_superadas_v1');
+    if (rawSuperadas) {
+      const parsedSup = JSON.parse(rawSuperadas);
+      if (parsedSup && typeof parsedSup === 'object') {
+        controlPreguntasSuperadas = parsedSup;
+      }
+    }
+  } catch (_) {}
+
+  // Recopilar IDs de exámenes eliminados y preguntas recientes
+  let examenesEliminadosIds: string[] = [];
+  try {
+    const rawEliminados = localStorage.getItem('c1_examenes_eliminados');
+    if (rawEliminados) {
+      const parsedElim = JSON.parse(rawEliminados);
+      if (Array.isArray(parsedElim)) examenesEliminadosIds = parsedElim;
+    }
+  } catch (_) {}
+
+  let historialPreguntasRecientes: string[] = [];
+  try {
+    const rawRecientes = localStorage.getItem('c1_historial_preguntas_recientes');
+    if (rawRecientes) {
+      const parsedRec = JSON.parse(rawRecientes);
+      if (Array.isArray(parsedRec)) historialPreguntasRecientes = parsedRec;
+    }
+  } catch (_) {}
+
   const darkMode = localStorage.getItem('c1_dark_mode') === 'true';
+  const autoAvanceRaw = localStorage.getItem('c1_auto_avance_al_final');
+  const autoAvanceAlFinal = autoAvanceRaw !== null ? autoAvanceRaw === 'true' : undefined;
+  const cortePropioTest = localStorage.getItem('c1_corte_propio_test') || undefined;
+  const cortePropioSupuesto = localStorage.getItem('c1_corte_propio_supuesto') || undefined;
+  const usarCortePropioRaw = localStorage.getItem('c1_usar_corte_propio');
+  const usarCortePropio = usarCortePropioRaw !== null ? usarCortePropioRaw === 'true' : undefined;
   const geminiApiKey = localStorage.getItem('gemini_custom_api_key') || undefined;
 
   const backup: CopiaSeguridadIntegral = {
@@ -3417,6 +3470,7 @@ export async function descargarCopiaSeguridadCompleta(
       totalDocumentosBiblioteca: bibliotecaDocumentos.length,
       totalSubtemasBiblioteca: subtemasBiblioteca.length,
       totalRecursosArgumentacion,
+      totalPreguntasControlFalladas: Object.keys(controlPreguntasSuperadas).length,
       timestamp: Date.now(),
     },
     bancoExamenes,
@@ -3427,8 +3481,15 @@ export async function descargarCopiaSeguridadCompleta(
     bibliotecaDocumentos,
     subtemasBiblioteca,
     recursosArgumentacionPorPregunta,
+    controlPreguntasSuperadas,
+    examenesEliminadosIds,
+    historialPreguntasRecientes,
     configuracion: {
       darkMode,
+      autoAvanceAlFinal,
+      cortePropioTest,
+      cortePropioSupuesto,
+      usarCortePropio,
       geminiApiKey,
     },
   };
@@ -3441,7 +3502,9 @@ export async function descargarCopiaSeguridadCompleta(
 }
 
 /**
- * Procesa y restaura una Copia de Seguridad Integral desde un archivo JSON/TXT
+ * Procesa y restaura una Copia de Seguridad Integral Única desde un archivo JSON/TXT
+ * restaurando todos los aspectos de la aplicación: Banco, Historial, Biblioteca (Dudas + Enlaces + Subtemas),
+ * Recursos de Argumentación, Anotaciones, Control de Preguntas Falladas/Superadas y Configuración.
  */
 export function restaurarCopiaSeguridadCompleta(rawText: string): {
   bancoExamenes: ExamenCompleto[];
@@ -3450,6 +3513,8 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
   almacenDudas: ItemAlmacenDuda[];
   bibliotecaDocumentos: DocumentoBibliotecaItem[];
   subtemasBiblioteca: string[];
+  examenesEliminadosIds: string[];
+  darkModeRestaurado?: boolean;
   anotacionesRestauradas: number;
 } {
   const cleaned = limpiarTextoJSON(rawText);
@@ -3474,6 +3539,56 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
     guardarEnLocalStorageSeguro(STORAGE_KEY_RECURSOS_ARGUMENTACION, mapaActual);
   }
 
+  if (parsed.controlPreguntasSuperadas && typeof parsed.controlPreguntasSuperadas === 'object') {
+    try {
+      const actualRaw = localStorage.getItem('c1_preguntas_superadas_v1');
+      const actualObj = actualRaw ? JSON.parse(actualRaw) : {};
+      const fusionado = { ...actualObj, ...parsed.controlPreguntasSuperadas };
+      guardarEnLocalStorageSeguro('c1_preguntas_superadas_v1', fusionado);
+    } catch (_) {}
+  }
+
+  let examenesEliminadosIds: string[] = [];
+  try {
+    const rawElim = localStorage.getItem('c1_examenes_eliminados');
+    if (rawElim) {
+      const parsedElim = JSON.parse(rawElim);
+      if (Array.isArray(parsedElim)) examenesEliminadosIds = parsedElim;
+    }
+  } catch (_) {}
+
+  if (Array.isArray(parsed.examenesEliminadosIds)) {
+    examenesEliminadosIds = Array.from(new Set([...examenesEliminadosIds, ...parsed.examenesEliminadosIds]));
+    guardarEnLocalStorageSeguro('c1_examenes_eliminados', examenesEliminadosIds);
+  }
+
+  if (Array.isArray(parsed.historialPreguntasRecientes)) {
+    guardarEnLocalStorageSeguro('c1_historial_preguntas_recientes', parsed.historialPreguntasRecientes);
+  }
+
+  let darkModeRestaurado: boolean | undefined = undefined;
+  if (parsed.configuracion && typeof parsed.configuracion === 'object') {
+    if (typeof parsed.configuracion.darkMode === 'boolean') {
+      darkModeRestaurado = parsed.configuracion.darkMode;
+      localStorage.setItem('c1_dark_mode', String(parsed.configuracion.darkMode));
+    }
+    if (typeof parsed.configuracion.autoAvanceAlFinal === 'boolean') {
+      localStorage.setItem('c1_auto_avance_al_final', String(parsed.configuracion.autoAvanceAlFinal));
+    }
+    if (typeof parsed.configuracion.cortePropioTest === 'string') {
+      localStorage.setItem('c1_corte_propio_test', parsed.configuracion.cortePropioTest);
+    }
+    if (typeof parsed.configuracion.cortePropioSupuesto === 'string') {
+      localStorage.setItem('c1_corte_propio_supuesto', parsed.configuracion.cortePropioSupuesto);
+    }
+    if (typeof parsed.configuracion.usarCortePropio === 'boolean') {
+      localStorage.setItem('c1_usar_corte_propio', String(parsed.configuracion.usarCortePropio));
+    }
+    if (parsed.configuracion.geminiApiKey) {
+      localStorage.setItem('gemini_custom_api_key', parsed.configuracion.geminiApiKey);
+    }
+  }
+
   // Caso A: Copia v2.5 / v2.6 / v3.2 con bancoExamenes e historialPruebas separados
   if (
     parsed.tipo === 'copia_seguridad_simulador_c1' &&
@@ -3494,10 +3609,6 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
         }
       });
     }
-
-    if (parsed.configuracion?.geminiApiKey) {
-      localStorage.setItem('gemini_custom_api_key', parsed.configuracion.geminiApiKey);
-    }
   }
   // Caso B: Copia v1.0 con examenesGuardados
   else if (parsed.tipo === 'copia_seguridad_simulador_c1' && Array.isArray(parsed.examenesGuardados)) {
@@ -3512,10 +3623,6 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
           anotacionesCount += notas.length;
         }
       });
-    }
-
-    if (parsed.configuracion?.geminiApiKey) {
-      localStorage.setItem('gemini_custom_api_key', parsed.configuracion.geminiApiKey);
     }
   }
   // Caso C: Array simple de exámenes
@@ -3533,7 +3640,19 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
       bancoExamenes = [unExamen];
     }
   } else if (Array.isArray(parsed.bibliotecaDocumentos) || Array.isArray(parsed.almacenDudas)) {
-    // Caso E: Archivo JSON específico de Biblioteca (Documentos o Dudas)
+    // Caso E: Retrocompatibilidad con archivos JSON previos de Biblioteca; conservamos banco e historial actuales
+    try {
+      const savedBanco = localStorage.getItem('c1_banco_examenes');
+      if (savedBanco) {
+        const parsedB = JSON.parse(savedBanco);
+        if (Array.isArray(parsedB)) bancoExamenes = parsedB;
+      }
+      const savedHist = localStorage.getItem('c1_historial_pruebas');
+      if (savedHist) {
+        const parsedH = JSON.parse(savedHist);
+        if (Array.isArray(parsedH)) historialPruebas = parsedH;
+      }
+    } catch (_) {}
   } else {
     throw new Error('El archivo no tiene la estructura de una copia de seguridad ni de examen oficial.');
   }
@@ -3565,6 +3684,8 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
     almacenDudas: almacenDudasRestauradas,
     bibliotecaDocumentos: bibliotecaDocumentosRestaurados,
     subtemasBiblioteca: subtemasBibliotecaRestaurados,
+    examenesEliminadosIds,
+    darkModeRestaurado,
     anotacionesRestauradas: anotacionesCount,
   };
 }

@@ -33,7 +33,6 @@ import {
 } from './utils/tematicaClassifier';
 import {
   exportarExamenAJSON,
-  exportarBibliotecaAJSON,
   parsearTextoOArchivoJSON,
   descargarCopiaSeguridadCompleta,
   restaurarCopiaSeguridadCompleta,
@@ -674,10 +673,22 @@ export default function App() {
         if (Array.isArray(res.subtemasBiblioteca)) {
           setSubtemasBiblioteca(res.subtemasBiblioteca);
         }
+        if (Array.isArray(res.examenesEliminadosIds)) {
+          setExamenesEliminadosIds(res.examenesEliminadosIds);
+        }
+        if (typeof res.darkModeRestaurado === 'boolean') {
+          setIsDarkMode(res.darkModeRestaurado);
+          if (res.darkModeRestaurado) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        }
+        setVersionFalladasApp((v) => v + 1);
         guardarEnLocalStorageSeguro('c1_banco_examenes', res.bancoExamenes);
         guardarEnLocalStorageSeguro('c1_historial_pruebas', res.historialPruebas);
         mostrarToast(
-          `¡Copia restaurada con éxito! ${res.bancoExamenes.length} exámenes en el Banco, ${res.historialPruebas.length} en Historial, ${res.almacenDudas?.length || 0} en Dudas y ${res.bibliotecaDocumentos?.length || 0} enlaces/documentos en Biblioteca.`,
+          `¡Copia de seguridad única restaurada! ${res.bancoExamenes.length} tests en Banco, ${res.historialPruebas.length} en Historial, ${res.almacenDudas?.length || 0} dudas y ${res.bibliotecaDocumentos?.length || 0} enlaces/documentos en Biblioteca.`,
           'exito'
         );
         setMostrarModalBackup(false);
@@ -1823,22 +1834,11 @@ export default function App() {
                     type="button"
                     onClick={() => setMostrarModalBackup(true)}
                     className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                    title="Copia de Seguridad Integral (Exportar o Restaurar toda tu información)"
+                    title="Copia de Seguridad e Importación Integral Única de toda la app (Tests, Historial, Biblioteca con Dudas y Enlaces, etc.)"
                   >
                     <i className="fa-solid fa-shield-halved text-amber-300"></i>
                     <span>Copia Seguridad</span>
                   </button>
-
-                  {historialPruebas.length > 0 && (
-                    <button
-                      onClick={() => exportarBibliotecaAJSON(historialPruebas, almacenDudas)}
-                      className="py-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                      title="Descargar historial con todas las pruebas realizadas, enlaces/ficheros de argumentación y datos de dudas en formato JSON"
-                    >
-                      <i className="fa-solid fa-download text-emerald-500"></i>
-                      <span>Exportar Todo</span>
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -2809,6 +2809,7 @@ export default function App() {
             onVerJustificacionPregunta={handleVerJustificacionPregunta}
             onNavegarATab={(tab: any) => setTabActiva(tab)}
             onActualizarPreguntaGlobal={(preg) => handleActualizarPreguntaGlobal(preg)}
+            onAbrirCopiaSeguridad={() => setMostrarModalBackup(true)}
           />
         )}
 
@@ -2958,10 +2959,10 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900 dark:text-white leading-tight">
-                    Copia de Seguridad Integral
+                    Copia de Seguridad e Importación Integral Única
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    Exporta o restaura todo tu Banco, preguntas, notas y resultados en formato JSON
+                    Exporta o importa en un único archivo JSON todos los aspectos de la app: Tests, Historial, Biblioteca (Dudas y Enlaces), Subtemas, Argumentaciones y Configuración
                   </p>
                 </div>
               </div>
@@ -2975,10 +2976,10 @@ export default function App() {
               </button>
             </div>
 
-            {/* Cuadros Métricos Resaltados: Tests disponibles y Total de preguntas */}
+            {/* Cuadros Métricos Resaltados: Tests disponibles, Total de preguntas, Historial y Biblioteca */}
             <div className="space-y-1.5">
               <span className="text-[10px] font-black uppercase text-slate-400 font-mono tracking-wider block">
-                Resumen de Contenido Almacenado:
+                Resumen Unificado de Datos Incluidos en la Copia:
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {/* Cuadro 1: Tests Disponibles en Banco */}
@@ -3033,7 +3034,7 @@ export default function App() {
                     {almacenDudas.length + bibliotecaDocumentos.length}
                   </span>
                   <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
-                    {almacenDudas.length} dudas · {bibliotecaDocumentos.length} docs
+                    {almacenDudas.length} dudas · {bibliotecaDocumentos.length} enlaces
                   </span>
                 </div>
               </div>
@@ -3046,14 +3047,14 @@ export default function App() {
                   <span className="h-6 w-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[11px] shrink-0">
                     <i className="fa-solid fa-download"></i>
                   </span>
-                  <span>Descargar Copia de Seguridad Completa</span>
+                  <span>1. Crear y Descargar Copia de Seguridad Única</span>
                 </div>
                 <span className="text-[9.5px] font-mono px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-300 dark:border-indigo-800">
-                  {bancoExamenes.length} tests · {bibliotecaDocumentos.length} enlaces
+                  Todo en 1 archivo .json
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                Descarga un archivo <strong>.json estructurado v3.2</strong> con todos tus datos: Banco de exámenes ({bancoExamenes.length} tests con {totalPreguntasBanco} preguntas), Historial ({historialPruebas.length} intentos), Almacén de dudas ({almacenDudas.length} notas) y Base de Datos de Enlaces/Documentos ({bibliotecaDocumentos.length} referencias y {subtemasBiblioteca.length} subtemas, sin archivos físicos).
+                Guarda en un único fichero <strong>.json integral (v3.2)</strong> todos los aspectos de la app: <strong>Banco de Exámenes</strong> ({bancoExamenes.length} tests con {totalPreguntasBanco} preguntas), <strong>Historial de Pruebas</strong> ({historialPruebas.length} intentos), <strong>Biblioteca completa</strong> ({almacenDudas.length} dudas/notas, {bibliotecaDocumentos.length} enlaces a webs/documentos locales y {subtemasBiblioteca.length} subtemas, sin archivos físicos), <strong>Enlaces de argumentación en justificaciones</strong>, <strong>Subrayados/anotaciones</strong>, <strong>Control de preguntas falladas/superadas</strong> y <strong>Configuración</strong>.
               </p>
               <button
                 type="button"
@@ -3069,7 +3070,7 @@ export default function App() {
                 className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
               >
                 <i className="fa-solid fa-floppy-disk"></i>
-                <span>Guardar Copia de Seguridad Integral (.json)</span>
+                <span>Guardar Copia de Seguridad Integral Única (.json)</span>
               </button>
             </div>
 
@@ -3079,10 +3080,10 @@ export default function App() {
                 <span className="h-6 w-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[11px] shrink-0">
                   <i className="fa-solid fa-upload"></i>
                 </span>
-                <span>Restaurar Copia de Seguridad</span>
+                <span>2. Importar y Restaurar Copia de Seguridad Única</span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Selecciona un archivo <strong>.json</strong> previo para importar y restaurar tus exámenes, histórico de pruebas y notas del almacén.
+                Selecciona tu archivo <strong>.json</strong> de copia de seguridad para restaurar de una sola vez todos tus tests, historial, biblioteca (dudas, enlaces a documentos y subtemas), argumentaciones de preguntas, control de falladas y preferencias.
               </p>
               <input
                 id="restore-backup-file-input"
@@ -3097,7 +3098,7 @@ export default function App() {
                 className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
               >
                 <i className="fa-solid fa-folder-open text-emerald-500"></i>
-                <span>Seleccionar Archivo de Copia de Seguridad</span>
+                <span>Importar Archivo de Copia de Seguridad (.json)</span>
               </button>
             </div>
 

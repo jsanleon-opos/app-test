@@ -13,6 +13,7 @@ interface SeccionBibliotecaViewProps {
   onVerJustificacionPregunta?: (pregunta: PreguntaExamen) => void;
   onNavegarATab?: (tab: string) => void;
   onActualizarPreguntaGlobal?: (preguntaActualizada: PreguntaExamen) => void;
+  onAbrirCopiaSeguridad?: () => void;
 }
 
 export const SeccionBibliotecaView: React.FC<SeccionBibliotecaViewProps> = ({
@@ -25,6 +26,7 @@ export const SeccionBibliotecaView: React.FC<SeccionBibliotecaViewProps> = ({
   onVerJustificacionPregunta,
   onNavegarATab,
   onActualizarPreguntaGlobal,
+  onAbrirCopiaSeguridad,
 }) => {
   const [subseccionActiva, setSubseccionActiva] = useState<'dudas' | 'documentos'>('dudas');
 
@@ -42,13 +44,25 @@ export const SeccionBibliotecaView: React.FC<SeccionBibliotecaViewProps> = ({
                 <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
                   Biblioteca de Estudio & Documentación C1 (AGE & CAM)
                 </h2>
-                <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold">
-                  Sincronizada con Copia de Seguridad JSON
-                </span>
+                {onAbrirCopiaSeguridad ? (
+                  <button
+                    type="button"
+                    onClick={onAbrirCopiaSeguridad}
+                    className="px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    title="Abrir el gestor único de Copia de Seguridad e Importación Integral de toda la app"
+                  >
+                    <i className="fa-solid fa-shield-halved text-[9px] text-indigo-500"></i>
+                    <span>Incluida en Copia de Seguridad Única de la App</span>
+                  </button>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold">
+                    Incluida en Copia de Seguridad Única de la App
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Alterna entre tu <strong>Almacén de Dudas y Notas</strong> actual y la nueva{' '}
-                <strong>Base de Datos de Documentos Locales y Enlaces Web</strong> clasificada por leyes, temas AGE/CAM y subtemas.
+                Alterna entre tu <strong>Almacén de Dudas y Notas</strong> actual y la{' '}
+                <strong>Base de Datos de Documentos Locales y Enlaces Web</strong> clasificada por leyes, temas AGE/CAM y subtemas. Toda la Biblioteca se guarda y restaura unificadamente mediante la <strong>Copia de Seguridad</strong> general.
               </p>
             </div>
           </div>

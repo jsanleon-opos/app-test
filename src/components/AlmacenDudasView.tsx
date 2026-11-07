@@ -9,10 +9,7 @@ import {
 import { SelectorLeyesEInformaticaModal } from './SelectorLeyesEInformaticaModal';
 import { GestorRecursosArgumentacionPregunta } from './GestorRecursosArgumentacionPregunta';
 import {
-  guardarArchivoConSelectorCarpeta,
   obtenerRecursosArgumentacionDePregunta,
-  fusionarAlmacenDudasEnLocalStorage,
-  limpiarTextoJSON,
 } from '../utils/jsonExamHelper';
 import { obtenerUrlBOEParaNorma, renderizarTextoConEnlacesBOE } from '../utils/boeUrlHelper';
 import {
@@ -597,53 +594,6 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
     }
   };
 
-  const handleExportarDudas = async () => {
-    if (itemsDudas.length === 0) return;
-    const enriquecidas = itemsDudas.map((it) => {
-      const rec = obtenerRecursosArgumentacionDePregunta(it);
-      return rec.length > 0 ? { ...it, recursosArgumentacion: rec } : it;
-    });
-    const dataStr = JSON.stringify(enriquecidas, null, 2);
-    const fecha = new Date().toISOString().split('T')[0];
-    await guardarArchivoConSelectorCarpeta(
-      dataStr,
-      `Almacen_Estudio_C1_${fecha}.json`,
-      'application/json',
-      '.json'
-    );
-  };
-
-  const handleImportarDudas = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const raw = typeof ev.target?.result === 'string' ? ev.target.result : '';
-        const parsed = JSON.parse(limpiarTextoJSON(raw));
-        let listaDudas: ItemAlmacenDuda[] = [];
-        if (Array.isArray(parsed)) {
-          // Puede ser un array de ItemAlmacenDuda o una biblioteca con almacenDudas en el primer elemento
-          if (parsed.length > 0 && Array.isArray(parsed[0]?.almacenDudas)) {
-            listaDudas = parsed[0].almacenDudas;
-          } else {
-            listaDudas = parsed.filter((x) => x && (x.enunciado || x.titulo));
-          }
-        } else if (parsed && Array.isArray(parsed.almacenDudas)) {
-          listaDudas = parsed.almacenDudas;
-        }
-        if (listaDudas.length > 0) {
-          const fusionadas = fusionarAlmacenDudasEnLocalStorage(listaDudas);
-          onActualizarItems(fusionadas);
-        }
-      } catch (err) {
-        console.error('Error importando JSON de dudas:', err);
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   // Render paginador superior o inferior sin barras de scroll
   const renderPaginacion = (posicion: 'superior' | 'inferior') => {
     if (itemsFiltrados.length === 0) return null;
@@ -755,14 +705,6 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <input
-              id="almacen-dudas-import-json"
-              type="file"
-              accept=".json"
-              onChange={handleImportarDudas}
-              className="hidden"
-            />
-
             <button
               type="button"
               onClick={() => handleAbrirModalAnadir('articulo_clave')}
@@ -771,27 +713,6 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
             >
               <i className="fa-solid fa-plus text-[10px]"></i>
               <span>+ Añadir</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => document.getElementById('almacen-dudas-import-json')?.click()}
-              className="py-2 px-3 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Importar fichas, preguntas y recursos de argumentación desde un archivo JSON"
-            >
-              <i className="fa-solid fa-file-import text-[11px] text-emerald-500"></i>
-              <span>Importar JSON</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={itemsDudas.length === 0}
-              onClick={handleExportarDudas}
-              className="py-2 px-3 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-              title="Descargar copia de seguridad en JSON de todas tus fichas, preguntas y enlaces/ficheros de argumentación del almacén"
-            >
-              <i className="fa-solid fa-download text-[11px] text-indigo-500"></i>
-              <span>Exportar JSON</span>
             </button>
           </div>
         </div>
