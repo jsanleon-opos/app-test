@@ -75,7 +75,21 @@ export function leerBibliotecaDocumentosDeLocalStorage(): DocumentoBibliotecaIte
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed.map((d) => sanitizarDocumentoBibliotecaSinBinarios(d));
+      const guardados = parsed.map((d) => sanitizarDocumentoBibliotecaSinBinarios(d));
+      // Incorporar automáticamente nuevos documentos oficiales iniciales (ej. RD 1708/2011, RD 366/2007, IV Convenio, RD 951/2005) si aún no constan
+      const idsExistentes = new Set(guardados.map((d) => d.id));
+      const urlsExistentes = new Set(guardados.map((d) => (d.enlaceORuta || '').trim()));
+      let huboNuevos = false;
+      for (const docInicial of DOCUMENTOS_INICIALES_BIBLIOTECA) {
+        if (!idsExistentes.has(docInicial.id) && !urlsExistentes.has((docInicial.enlaceORuta || '').trim())) {
+          guardados.push(docInicial);
+          huboNuevos = true;
+        }
+      }
+      if (huboNuevos) {
+        guardarEnLocalStorageSeguro(STORAGE_KEY_BIBLIOTECA_DOCUMENTOS, guardados);
+      }
+      return guardados;
     }
     return DOCUMENTOS_INICIALES_BIBLIOTECA;
   } catch (_) {
@@ -1153,6 +1167,54 @@ function detectarFundamentacionLegal(
       fundamento:
         explicacionAdicional ||
         'Fundamentado en el Real Decreto 1708/2011 del Sistema Español de Archivos (BOE).',
+    };
+  }
+
+  if (
+    combinado.includes('951/2005') ||
+    combinado.includes('marco general para la mejora de la calidad') ||
+    combinado.includes('cartas de servicios')
+  ) {
+    return {
+      norma: 'Real Decreto 951/2005, de 29 de julio, por el que se establece el marco general para la mejora de la calidad en la Administración General del Estado',
+      articulo,
+      codigoBOE: 'BOE-A-2005-14836',
+      urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2005-14836',
+      fundamento:
+        explicacionAdicional ||
+        'Fundamentado en el Real Decreto 951/2005 sobre mejora de la calidad en la AGE (BOE).',
+    };
+  }
+
+  if (
+    combinado.includes('366/2007') ||
+    (combinado.includes('accesibilidad') && combinado.includes('discapacidad'))
+  ) {
+    return {
+      norma: 'Real Decreto 366/2007, de 16 de marzo, por el que se establecen las condiciones de accesibilidad y no discriminación de las personas con discapacidad en sus relaciones con la Administración General del Estado',
+      articulo,
+      codigoBOE: 'BOE-A-2007-6567',
+      urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2007-6567',
+      fundamento:
+        explicacionAdicional ||
+        'Fundamentado en el Real Decreto 366/2007 de accesibilidad y no discriminación en la AGE (BOE).',
+    };
+  }
+
+  if (
+    combinado.includes('iv convenio') ||
+    combinado.includes('convenio único') ||
+    combinado.includes('convenio colectivo único') ||
+    combinado.includes('convenio colectivo de personal laboral')
+  ) {
+    return {
+      norma: 'IV Convenio colectivo único para el personal laboral de la Administración General del Estado',
+      articulo,
+      codigoBOE: 'BOE-A-2019-7414',
+      urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2019-7414',
+      fundamento:
+        explicacionAdicional ||
+        'Fundamentado en el IV Convenio colectivo único para el personal laboral de la AGE (BOE).',
     };
   }
 

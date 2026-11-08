@@ -3911,6 +3911,234 @@ export const PREGUNTAS_UNITARIAS_BOE: PreguntaExamen[] = [
       "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2011-18541#a30",
       "fundamento": "Las solicitudes de acceso se resolverán en el plazo máximo de un mes. Transcurrido este plazo sin que se hubiera dictado y notificado resolución expresa, el interesado podrá entender desestimada su solicitud."
     }
+  },
+  {
+    "id": 106,
+    "enunciado": "Según el artículo 4 del Real Decreto 366/2007, sobre condiciones de accesibilidad y no discriminación de las personas con discapacidad en sus relaciones con la Administración General del Estado, en relación con la ubicación de las Oficinas de Atención al Ciudadano de nueva creación:",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "Se ubicarán preferentemente en planta a nivel de la vía pública; en caso contrario, deberán disponer de rampas de acceso o ascensores con características que permitan su uso autónomo y seguro por personas con discapacidad.",
+        "esCorrecta": true,
+        "explicacion": "El art. 4 del RD 366/2007 establece que se ubicarán preferentemente en planta a nivel de la vía pública y, de no ser posible, contarán con rampas o ascensores accesibles."
+      },
+      {
+        "id": "B",
+        "texto": "Deberán situarse obligatoriamente en la última planta de los edificios administrativos por razones de seguridad perimetral.",
+        "esCorrecta": false,
+        "explicacion": "El art. 4 exige preferentemente la ubicación en planta a nivel de la vía pública."
+      },
+      {
+        "id": "C",
+        "texto": "Únicamente están obligadas a garantizar la accesibilidad física las oficinas que atiendan a más de 5.000 ciudadanos diarios.",
+        "esCorrecta": false,
+        "explicacion": "El RD 366/2007 se aplica a las Oficinas de Atención al Ciudadano sin umbral mínimo de visitas diarias."
+      },
+      {
+        "id": "D",
+        "texto": "Quedan exentas de contar con ascensor o rampa si disponen de buzón postal exterior.",
+        "esCorrecta": false,
+        "explicacion": "No existe tal exención; deben garantizar el acceso autónomo y seguro."
+      }
+    ],
+    "leyesRelacionadas": ["RD 366/2007 (Accesibilidad y No Discriminación AGE)"],
+    "justificacionLegal": {
+      "norma": "Real Decreto 366/2007, de 16 de marzo, por el que se establecen las condiciones de accesibilidad y no discriminación de las personas con discapacidad en sus relaciones con la Administración General del Estado",
+      "articulo": "Artículo 4",
+      "codigoBOE": "BOE-A-2007-6567",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2007-6567#a4",
+      "fundamento": "Las Oficinas de Atención al Ciudadano se ubicarán preferentemente en planta a nivel de la vía pública. En caso contrario, deberán disponer de rampas de acceso o ascensores que permitan su uso autónomo y seguro por personas con discapacidad."
+    }
+  },
+  {
+    "id": 107,
+    "enunciado": "De conformidad con el artículo 13 del Real Decreto 366/2007, respecto a la disponibilidad de documentos e impresos administrativos para personas con discapacidad:",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "A requerimiento de la persona con discapacidad, se ofrecerán en formatos alternativos utilizando tipografías grandes o ampliadas, en braille, o bien se contará con personal de apoyo para su cumplimentación, además de estar disponibles en las páginas web en formatos accesibles.",
+        "esCorrecta": true,
+        "explicacion": "El art. 13.2 y 13.3 del RD 366/2007 regula la accesibilidad documental, formatos alternativos (macrotipos, braille) y apoyo personal para su cumplimentación."
+      },
+      {
+        "id": "B",
+        "texto": "La Administración exigirá al ciudadano con discapacidad que aporte a su costa un traductor jurado o fedatario público para rellenar cualquier impreso oficial.",
+        "esCorrecta": false,
+        "explicacion": "Es la propia Administración quien facilita formatos alternativos o personal de apoyo sin coste."
+      },
+      {
+        "id": "C",
+        "texto": "Los documentos administrativos solo deben ser accesibles en soporte papel, quedando excluidos los formularios electrónicos de las sedes web.",
+        "esCorrecta": false,
+        "explicacion": "El art. 13.2 obliga expresamente a que los documentos e impresos estén disponibles en las páginas web correspondientes en formatos accesibles."
+      },
+      {
+        "id": "D",
+        "texto": "Los impresos dirigidos a los ciudadanos deberán redactarse exclusivamente en lenguaje técnico-jurídico abreviado sin espacio para firma.",
+        "esCorrecta": false,
+        "explicacion": "El art. 13.1 exige lenguaje simple y directo, sin abreviaturas, y con espacios amplios."
+      }
+    ],
+    "leyesRelacionadas": ["RD 366/2007 (Accesibilidad y No Discriminación AGE)"],
+    "justificacionLegal": {
+      "norma": "Real Decreto 366/2007, de 16 de marzo, por el que se establecen las condiciones de accesibilidad y no discriminación de las personas con discapacidad en sus relaciones con la Administración General del Estado",
+      "articulo": "Artículo 13",
+      "codigoBOE": "BOE-A-2007-6567",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2007-6567#a13",
+      "fundamento": "Los documentos e impresos deberán estar redactados con un lenguaje simple y directo, estar disponibles en formatos accesibles en la web y ofrecerse, a requerimiento de la persona con discapacidad, en formatos alternativos o con personal de apoyo."
+    }
+  },
+  {
+    "id": 108,
+    "enunciado": "Conforme al artículo 2 del Real Decreto 951/2005, por el que se establece el marco general para la mejora de la calidad en la Administración General del Estado, ¿cuáles son los seis programas que integran dicho marco general?",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "Análisis de la demanda y evaluación de la satisfacción de los usuarios, Cartas de servicios, Quejas y sugerencias, Evaluación de la calidad de las organizaciones, Reconocimiento y Observatorio de la Calidad de los Servicios Públicos.",
+        "esCorrecta": true,
+        "explicacion": "El art. 2 del RD 951/2005 enumera exactamente estos seis programas integrados en el marco general para la mejora de la calidad en la AGE."
+      },
+      {
+        "id": "B",
+        "texto": "Inspección tributaria, Control interno de la IGAE, Fiscalización del Tribunal de Cuentas, Subvenciones, Contratación menor y Expropiación forzosa.",
+        "esCorrecta": false,
+        "explicacion": "Esos procedimientos pertenecen al ámbito presupuestario y administrativo general, no a los 6 programas del RD 951/2005."
+      },
+      {
+        "id": "C",
+        "texto": "Únicamente el programa de Cartas de Servicios y el programa de Sanciones Disciplinarias.",
+        "esCorrecta": false,
+        "explicacion": "El marco general del art. 2 comprende 6 programas específicos de calidad."
+      },
+      {
+        "id": "D",
+        "texto": "Selección de personal, Provisión de puestos, Promoción interna, Situaciones administrativas, Incompatibilidades y Jubilación forzosa.",
+        "esCorrecta": false,
+        "explicacion": "Esas materias corresponden a función pública (TREBEP / RD 364/1995), no al RD 951/2005."
+      }
+    ],
+    "leyesRelacionadas": ["RD 951/2005 (Mejora de la Calidad en la AGE)"],
+    "justificacionLegal": {
+      "norma": "Real Decreto 951/2005, de 29 de julio, por el que se establece el marco general para la mejora de la calidad en la Administración General del Estado",
+      "articulo": "Artículo 2",
+      "codigoBOE": "BOE-A-2005-14836",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2005-14836#a2",
+      "fundamento": "El marco general para la mejora de la calidad en la AGE está integrado por seis programas: a) análisis de la demanda y evaluación de la satisfacción, b) cartas de servicios, c) quejas y sugerencias, d) evaluación de la calidad, e) reconocimiento y f) observatorio de la calidad."
+    }
+  },
+  {
+    "id": 109,
+    "enunciado": "Según los artículos 11 y 16 del Real Decreto 951/2005, ¿qué órgano aprueba las Cartas de Servicios en un Departamento ministerial y en qué plazo debe informarse al ciudadano de las actuaciones realizadas ante una queja o sugerencia?",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "Las Cartas de Servicios se aprueban por resolución del Subsecretario del departamento al que pertenezca el órgano u organismo, y recibida la queja o sugerencia la unidad responsable debe informar al interesado de las actuaciones realizadas en el plazo de 20 días hábiles.",
+        "esCorrecta": true,
+        "explicacion": "El art. 11.1 atribuye la aprobación de las Cartas de Servicios al Subsecretario del departamento (publicándose en el BOE), y el art. 16.1 fija el plazo de 20 días hábiles para contestar quejas y sugerencias."
+      },
+      {
+        "id": "B",
+        "texto": "Las Cartas de Servicios se aprueban por Ley Orgánica de las Cortes Generales y las quejas se contestan en el plazo de 6 meses naturales.",
+        "esCorrecta": false,
+        "explicacion": "Se aprueban por resolución del Subsecretario y el plazo de contestación de quejas es de 20 días hábiles."
+      },
+      {
+        "id": "C",
+        "texto": "Las Cartas de Servicios las aprueba el Defensor del Pueblo y las quejas tienen efectos de recurso administrativo de alzada.",
+        "esCorrecta": false,
+        "explicacion": "Según el art. 17 del RD 951/2005, las quejas formuladas no tendrán en ningún caso la calificación de recurso administrativo."
+      },
+      {
+        "id": "D",
+        "texto": "Las Cartas de Servicios tienen una vigencia perpetua e inmodificable de 50 años y no requieren publicación oficial.",
+        "esCorrecta": false,
+        "explicacion": "Deben actualizarse periódicamente (al menos cada 3 años) y su resolución aprobatoria se publica en el BOE."
+      }
+    ],
+    "leyesRelacionadas": ["RD 951/2005 (Mejora de la Calidad en la AGE)"],
+    "justificacionLegal": {
+      "norma": "Real Decreto 951/2005, de 29 de julio, por el que se establece el marco general para la mejora de la calidad en la Administración General del Estado",
+      "articulo": "Artículos 11.1 y 16.1",
+      "codigoBOE": "BOE-A-2005-14836",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2005-14836#a11",
+      "fundamento": "Las cartas de servicios serán aprobadas por resolución del Subsecretario del departamento (art. 11.1). Recibida la queja o sugerencia, la unidad responsable informará al interesado de las actuaciones realizadas en el plazo de 20 días hábiles (art. 16.1)."
+    }
+  },
+  {
+    "id": 110,
+    "enunciado": "De acuerdo con el IV Convenio colectivo único para el personal laboral de la Administración General del Estado, ¿cómo se estructura el sistema de clasificación profesional en grupos profesionales y cuál es la composición de la Comisión Paritaria?",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "El personal se clasifica en cinco grupos profesionales (M3, M2, M1, E2 y E1) conforme a la titulación exigida para el ingreso, y la Comisión Paritaria está integrada por 15 miembros de cada una de las partes (Administración y organizaciones sindicales).",
+        "esCorrecta": true,
+        "explicacion": "El IV Convenio Único clasifica al personal laboral en los grupos M3, M2, M1, E2 y E1 (además del Anexo II) y establece una Comisión Paritaria de 15 vocales por cada representación."
+      },
+      {
+        "id": "B",
+        "texto": "Se clasifica en los Subgrupos A1, A2, C1 y C2 idénticos a los funcionarios de carrera y carece de Comisión Paritaria.",
+        "esCorrecta": false,
+        "explicacion": "Los subgrupos A1, A2, B, C1 y C2 corresponden al personal funcionario (art. 76 TREBEP); el IV Convenio Único utiliza los grupos M3, M2, M1, E2 y E1."
+      },
+      {
+        "id": "C",
+        "texto": "Se clasifica en diez categorías militares y la Comisión Paritaria tiene 100 miembros designados por el Senado.",
+        "esCorrecta": false,
+        "explicacion": "La Comisión Paritaria cuenta con 15 representantes de la Administración y 15 de la parte social."
+      },
+      {
+        "id": "D",
+        "texto": "El IV Convenio Único solo contempla un único grupo profesional indiferenciado para todo el personal laboral.",
+        "esCorrecta": false,
+        "explicacion": "Contempla cinco grupos profesionales (M3, M2, M1, E2 y E1) estructurados en familias profesionales y especialidades."
+      }
+    ],
+    "leyesRelacionadas": ["IV Convenio Colectivo Personal Laboral AGE"],
+    "justificacionLegal": {
+      "norma": "IV Convenio colectivo único para el personal laboral de la Administración General del Estado",
+      "articulo": "Artículos 3 y 9",
+      "codigoBOE": "BOE-A-2019-7414",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2019-7414",
+      "fundamento": "La Comisión Paritaria estará compuesta por 15 miembros de cada una de las partes (art. 3). El sistema de clasificación profesional se estructura en los grupos profesionales M3, M2, M1, E2 y E1 (art. 9)."
+    }
+  },
+  {
+    "id": 111,
+    "enunciado": "Según el capítulo VI del IV Convenio colectivo único para el personal laboral de la Administración General del Estado, ¿cuál es el procedimiento ordinario de provisión de puestos de trabajo vacantes de personal laboral fijo?",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "El concurso abierto y permanente, que se resolverá al menos con carácter trimestral (cuatro fases al año).",
+        "esCorrecta": true,
+        "explicacion": "El IV Convenio Único regula el concurso abierto y permanente como sistema ordinario de provisión y movilidad del personal laboral fijo."
+      },
+      {
+        "id": "B",
+        "texto": "La libre designación discrecional sin convocatoria pública para todos los puestos de los grupos E1 y E2.",
+        "esCorrecta": false,
+        "explicacion": "El procedimiento ordinario es el concurso abierto y permanente."
+      },
+      {
+        "id": "C",
+        "texto": "El sorteo notarial entre aspirantes que no tengan la condición de personal laboral fijo.",
+        "esCorrecta": false,
+        "explicacion": "La provisión ordinaria entre personal laboral fijo se realiza mediante concurso abierto y permanente valorando méritos."
+      },
+      {
+        "id": "D",
+        "texto": "La permuta forzosa impuesta unilateralmente sin derecho a indemnización ni audiencia.",
+        "esCorrecta": false,
+        "explicacion": "El sistema ordinario previsto en el convenio es el concurso abierto y permanente."
+      }
+    ],
+    "leyesRelacionadas": ["IV Convenio Colectivo Personal Laboral AGE"],
+    "justificacionLegal": {
+      "norma": "IV Convenio colectivo único para el personal laboral de la Administración General del Estado",
+      "articulo": "Artículos 28 a 32",
+      "codigoBOE": "BOE-A-2019-7414",
+      "urlBOE": "https://www.boe.es/buscar/act.php?id=BOE-A-2019-7414",
+      "fundamento": "La provisión ordinaria de puestos de trabajo vacantes de necesaria cobertura se efectuará a través del procedimiento de concurso abierto y permanente."
+    }
   }
 ];
 
@@ -5314,6 +5542,15 @@ function getNormaTagsDePregunta(p: PreguntaExamen): string[] {
   if (codigoBOE === 'BOE-A-2011-18541' || normaNorm.includes('1708/2011') || normaNorm.includes('sistema espanol de archivos')) {
     tags.push('1708/2011');
   }
+  if (codigoBOE === 'BOE-A-2007-6567' || normaNorm.includes('366/2007') || (normaNorm.includes('accesibilidad') && normaNorm.includes('discapacidad'))) {
+    tags.push('366/2007');
+  }
+  if (codigoBOE === 'BOE-A-2005-14836' || normaNorm.includes('951/2005') || normaNorm.includes('mejora de la calidad')) {
+    tags.push('951/2005');
+  }
+  if (codigoBOE === 'BOE-A-2019-7414' || normaNorm.includes('iv convenio') || normaNorm.includes('convenio colectivo') || normaNorm.includes('convenio unico')) {
+    tags.push('iv_convenio');
+  }
   if (codigoBOE === 'BOE-A-2012-5730' || normaNorm.includes('2/2012') || normaNorm.includes('estabilidad presupuestaria')) {
     tags.push('2/2012');
   }
@@ -5410,6 +5647,15 @@ function identificarTagsSolicitados(leyesStr: string, tematicasStr: string): str
   }
   if (textoParaTags.includes('1708/2011') || textoParaTags.includes('sistema espanol de archivos') || textoParaTags.includes('archivos')) {
     tags.push('1708/2011');
+  }
+  if (textoParaTags.includes('366/2007') || textoParaTags.includes('accesibilidad')) {
+    tags.push('366/2007');
+  }
+  if (textoParaTags.includes('951/2005') || textoParaTags.includes('mejora de la calidad') || textoParaTags.includes('cartas de servicios')) {
+    tags.push('951/2005');
+  }
+  if (textoParaTags.includes('iv convenio') || textoParaTags.includes('convenio colectivo') || textoParaTags.includes('convenio unico')) {
+    tags.push('iv_convenio');
   }
   if (textoParaTags.includes('2/2012') || textoParaTags.includes('loepsf') || textoParaTags.includes('estabilidad presupuestaria')) {
     tags.push('2/2012');
@@ -5691,6 +5937,9 @@ export function generarBancoPreguntasBOE(
     '1/1986': 'Ley 1/1986 de la Función Pública de la Comunidad de Madrid (BOE-A-1986-13612)',
     '9/1990': 'Ley 9/1990 Reguladora de la Hacienda de la Comunidad de Madrid (BOE-A-1991-3837)',
     '1708/2011': 'Real Decreto 1708/2011 Sistema Español de Archivos (BOE-A-2011-18541)',
+    '366/2007': 'Real Decreto 366/2007 de Accesibilidad y No Discriminación en la AGE (BOE-A-2007-6567)',
+    '951/2005': 'Real Decreto 951/2005 Marco General para la Mejora de la Calidad en la AGE (BOE-A-2005-14836)',
+    'iv_convenio': 'IV Convenio Colectivo Único para el Personal Laboral de la AGE (BOE-A-2019-7414)',
     '2/2012': 'Ley Orgánica 2/2012 de Estabilidad Presupuestaria y Sostenibilidad Financiera (BOE-A-2012-5730)',
     'cam': 'Legislación Autonómica de la Comunidad de Madrid (Estatuto, Gobierno y Asamblea)',
   };

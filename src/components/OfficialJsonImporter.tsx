@@ -1440,9 +1440,9 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                           {/* 1. Título, Fecha, Metadatos y Acceso a Historial */}
                           <td className="py-2 px-3 overflow-hidden">
                             <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-start gap-1.5">
                                 <span
-                                  className="font-bold text-slate-900 dark:text-white leading-tight truncate text-xs block"
+                                  className="font-bold text-slate-900 dark:text-white leading-snug whitespace-normal break-words text-xs block"
                                   title={item.titulo}
                                 >
                                   {item.titulo}
@@ -1450,7 +1450,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => abrirRenombrar(item)}
-                                  className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-0.5 cursor-pointer shrink-0"
+                                  className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-0.5 cursor-pointer shrink-0 mt-0.5"
                                   title="Renombrar este examen"
                                 >
                                   <i className="fa-solid fa-pen-to-square text-[10px]"></i>
@@ -1768,7 +1768,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                     </div>
 
                     <div className="flex items-start justify-between gap-1.5">
-                      <h4 className="text-xs font-black text-slate-900 dark:text-white leading-snug line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      <h4 className="text-xs font-black text-slate-900 dark:text-white leading-snug whitespace-normal break-words group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                         {ex.titulo}
                       </h4>
                       <button
@@ -2598,9 +2598,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                         Editor de Respuestas Correctas y Plantilla Oficial
                       </h3>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-black">
-                        {editorRespuestas.origenAcceso === 'historial'
-                          ? 'Abierto desde Historial → Ventana Importación'
-                          : 'Ventana Importación / Banco de Exámenes'}
+                        Banco de Exámenes / Importación
                       </span>
                       {totalModificadas > 0 && (
                         <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 font-mono text-[10px] font-black">

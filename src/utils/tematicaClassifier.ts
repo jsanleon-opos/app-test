@@ -328,6 +328,15 @@ export function deducirNormaOTemaDesdeTexto(texto: string): string | null {
   if (/\b(1708\/2011|sistema espa[ñn]ol de archivos|sistema de archivos de la administraci[óo]n general del estado|archivo general de la administraci[óo]n|comisi[óo]n superior calificadora de documentos administrativos|archivo de oficina|archivo intermedio)\b/i.test(low)) {
     return 'Real Decreto 1708/2011, de 18 de noviembre, por el que se establece el Sistema Español de Archivos';
   }
+  if (/\b(951\/2005|marco general para la mejora de la calidad|mejora de la calidad en la administraci[óo]n general del estado|cartas de servicios|observatorio de la calidad de los servicios p[úu]blicos)\b/i.test(low)) {
+    return 'Real Decreto 951/2005, de 29 de julio, por el que se establece el marco general para la mejora de la calidad en la Administración General del Estado';
+  }
+  if (/\b(366\/2007|condiciones de accesibilidad y no discriminaci[óo]n de las personas con discapacidad)\b/i.test(low)) {
+    return 'Real Decreto 366/2007, de 16 de marzo, por el que se establecen las condiciones de accesibilidad y no discriminación de las personas con discapacidad en sus relaciones con la AGE';
+  }
+  if (/\b(iv convenio|convenio colectivo [úu]nico|convenio [úu]nico para el personal laboral|grupos profesionales m1|m2|m3|e1|e2)\b/i.test(low)) {
+    return 'IV Convenio colectivo único para el personal laboral de la Administración General del Estado';
+  }
   if (/\b(203\/2021|actuaci[óo]n y funcionamiento del sector p[úu]blico por medios electr[óo]nicos)\b/i.test(low)) {
     return 'Real Decreto 203/2021: Reglamento de actuación del sector público por medios electrónicos';
   }
@@ -400,7 +409,7 @@ export function esTemaInformaticaOficial(nombre: string): boolean {
 
 function esNormaJuridicaBOE(texto: string): boolean {
   if (!texto) return false;
-  return /\b(ley\b|real decreto|decreto legislativo|\brd\b|\brdl\b|\blo\b|constituci[óo]n|estatuto de autonom[íi]a|reglamento de la asamblea|trebep|lpacap|lrjsp|lcsp|lgp|loepsf|lopdgdd|rgpd|\d+\/19\d{2}|\d+\/20\d{2})\b/i.test(
+  return /\b(ley\b|real decreto|decreto legislativo|\brd\b|\brdl\b|\blo\b|convenio colectivo|iv convenio|constituci[óo]n|estatuto de autonom[íi]a|reglamento de la asamblea|trebep|lpacap|lrjsp|lcsp|lgp|loepsf|lopdgdd|rgpd|\d+\/19\d{2}|\d+\/20\d{2})\b/i.test(
     texto
   );
 }
@@ -598,9 +607,9 @@ export function clasificarPreguntaEnCategoriaTemario(
     return 'regimen_sector_publico';
   }
 
-  // Procedimiento Administrativo Común (Ley 39/2015, RD 203/2021 y RD 1708/2011 de Archivos)
+  // Procedimiento Administrativo Común (Ley 39/2015, RD 203/2021, RD 1708/2011, RD 951/2005 y RD 366/2007)
   if (
-    /\b(39\/2015|lpacap|203\/2021|1708\/2011|sistema espa[ñn]ol de archivos|archivo general de la administraci[óo]n|311\/2022|4\/2010|procedimiento administrativo com[úu]n|acto administrativo|silencio administrativo|recurso de alzada|recurso potestativo de reposici[óo]n|recurso extraordinario de revisi[óo]n|revisi[óo]n de oficio|lesividad|nulidad de pleno derecho|anulabilidad|notificaci[óo]n|c[óo]mputo de plazos|interesados|ejecuci[óo]n forzosa|apremio sobre el patrimonio)\b/i.test(
+    /\b(39\/2015|lpacap|203\/2021|1708\/2011|951\/2005|366\/2007|sistema espa[ñn]ol de archivos|archivo general de la administraci[óo]n|cartas de servicios|mejora de la calidad|311\/2022|4\/2010|procedimiento administrativo com[úu]n|acto administrativo|silencio administrativo|recurso de alzada|recurso potestativo de reposici[óo]n|recurso extraordinario de revisi[óo]n|revisi[óo]n de oficio|lesividad|nulidad de pleno derecho|anulabilidad|notificaci[óo]n|c[óo]mputo de plazos|interesados|ejecuci[óo]n forzosa|apremio sobre el patrimonio)\b/i.test(
       textoPrioritario
     )
   ) {
@@ -809,6 +818,15 @@ export function normalizarNombreLey(raw: string): string {
   }
   if (low.includes('1708/2011') || low.includes('sistema español de archivos') || low.includes('sistema espanol de archivos') || low.includes('sistema de archivos')) {
     return 'RD 1708/2011 (Sistema Español de Archivos)';
+  }
+  if (low.includes('951/2005') || low.includes('mejora de la calidad')) {
+    return 'RD 951/2005 (Mejora de la Calidad en la AGE)';
+  }
+  if (low.includes('366/2007') || (low.includes('accesibilidad') && low.includes('discapacidad'))) {
+    return 'RD 366/2007 (Accesibilidad y No Discriminación AGE)';
+  }
+  if (low.includes('iv convenio') || low.includes('convenio único') || low.includes('convenio unico') || low.includes('convenio colectivo de personal laboral') || low.includes('convenio colectivo personal laboral')) {
+    return 'IV Convenio Colectivo Personal Laboral AGE';
   }
   if (low.includes('203/2021')) {
     return 'RD 203/2021 (Admin. Electrónica)';

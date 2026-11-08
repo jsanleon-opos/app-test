@@ -95,7 +95,6 @@ export default function App() {
   const [examenARenombrar, setExamenARenombrar] = useState<{ id: string; titulo: string } | null>(null);
   const [nuevoNombreInput, setNuevoNombreInput] = useState<string>('');
   const [examenRecuperarPregunta, setExamenRecuperarPregunta] = useState<ExamenCompleto | null>(null);
-  const [examenParaEditarRespuestas, setExamenParaEditarRespuestas] = useState<ExamenCompleto | null>(null);
 
   // History filtering & sorting state
   const [busquedaHistorial, setBusquedaHistorial] = useState<string>('');
@@ -1018,12 +1017,6 @@ export default function App() {
     mostrarToast(`Catalogación actualizada (${nuevasLeyes.join(', ')})`, 'exito');
   };
 
-  const handleIrAEditarRespuestasEnImportacion = (examen: ExamenCompleto) => {
-    setExamenRecuperarPregunta(null);
-    setExamenParaEditarRespuestas(examen);
-    setTabActiva('importar_json');
-  };
-
   const handleGuardarRespuestasCorregidas = (examenCorregido: ExamenCompleto) => {
     const mapaPorId = new Map<number, PreguntaExamen>();
     const mapaPorClave = new Map<string, PreguntaExamen>();
@@ -1601,10 +1594,10 @@ export default function App() {
                     type="button"
                     onClick={() => setMostrarModalVersion(true)}
                     className="text-[9px] sm:text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 font-mono inline-flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                    title="Ver novedades y cambios de la Versión 3.1"
+                    title="Ver novedades y últimos cambios de la Versión 3.2"
                   >
                     <i className="fa-solid fa-sparkles text-[8px] text-amber-300"></i>
-                    <span>v3.1 · Novedades</span>
+                    <span>v3.2 · Novedades</span>
                   </button>
                   <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-mono flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -1633,7 +1626,7 @@ export default function App() {
                     className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
                   >
                     <i className="fa-solid fa-clock-rotate-left text-[8.5px]"></i>
-                    <span>Actualización v3.1 (Aviso Pre-Evaluación de Respondidas/Blancos/Dudosas + Simulacro 70+20 + Catalogación Oficial)</span>
+                    <span>Actualización v3.2 (RD 366/2007, IV Convenio AGE y RD 951/2005 + Títulos Multilínea + Editor en Banco + Biblioteca)</span>
                   </button>
                 </p>
               </div>
@@ -1645,10 +1638,10 @@ export default function App() {
                 type="button"
                 onClick={() => setMostrarModalVersion(true)}
                 className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                title="Notas de la versión 3.1 y mejoras de esta semana"
+                title="Notas de la versión 3.2 y últimos cambios implementados"
               >
                 <i className="fa-solid fa-code-branch text-emerald-600 dark:text-emerald-400 text-[11px]"></i>
-                <span className="hidden sm:inline">Versión 3.1</span>
+                <span className="hidden sm:inline">Versión 3.2</span>
               </button>
 
               <button
@@ -1884,8 +1877,6 @@ export default function App() {
             onCambiarAmbitoExamen={handleCambiarAmbitoExamen}
             onCambiarLeyesExamen={handleCambiarLeyesExamen}
             onRenombrarExamen={(id, tit) => solicitarRenombrarExamen(id, tit)}
-            examenParaEditarRespuestas={examenParaEditarRespuestas}
-            onLimpiarExamenParaEditarRespuestas={() => setExamenParaEditarRespuestas(null)}
             onGuardarRespuestasCorregidas={handleGuardarRespuestasCorregidas}
           />
         )}
@@ -2499,9 +2490,9 @@ export default function App() {
                             {/* TÍTULO, FECHA Y METADATOS INTEGRADOS */}
                             <td className="py-2 px-3 overflow-hidden">
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-start gap-1.5">
                                   <span
-                                    className="font-bold text-slate-900 dark:text-white leading-tight truncate text-xs block"
+                                    className="font-bold text-slate-900 dark:text-white leading-snug whitespace-normal break-words text-xs block"
                                     title={item.titulo}
                                   >
                                     {item.titulo}
@@ -2509,7 +2500,7 @@ export default function App() {
                                   <button
                                     type="button"
                                     onClick={() => solicitarRenombrarExamen(item.id, item.titulo)}
-                                    className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-0.5 cursor-pointer shrink-0"
+                                    className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-0.5 cursor-pointer shrink-0 mt-0.5"
                                     title="Renombrar este examen"
                                   >
                                     <i className="fa-solid fa-pen-to-square text-[10px]"></i>
@@ -2553,16 +2544,6 @@ export default function App() {
                                   >
                                     <i className="fa-solid fa-tags text-[8px]"></i>
                                     <span>Catalogar</span>
-                                  </button>
-                                  <span>•</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleIrAEditarRespuestasEnImportacion(item)}
-                                    className="text-[9px] text-emerald-700 dark:text-emerald-400 hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
-                                    title="Ir a la ventana Importación para corregir qué respuestas son correctas y recalcular la nota automáticamente"
-                                  >
-                                    <i className="fa-solid fa-check-double text-[8px]"></i>
-                                    <span>Corregir respuestas</span>
                                   </button>
                                   {item.anotaciones && item.anotaciones.length > 0 && (
                                     <span className="text-amber-600 dark:text-amber-400 font-bold">
@@ -2728,16 +2709,6 @@ export default function App() {
                             {/* ACCIONES (estrictamente alineadas con slots de ancho idéntico) */}
                             <td className="py-2 px-3 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5 w-full">
-                                {/* Slot 0: Editar respuestas correctas en Importación */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleIrAEditarRespuestasEnImportacion(item)}
-                                  className="h-7 w-7 rounded-lg text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-xs transition-colors cursor-pointer shrink-0"
-                                  title="Editar respuestas correctas desde la ventana Importación (actualiza tus respuestas y recalcula tu nota)"
-                                >
-                                  <i className="fa-solid fa-check-double text-[10px]"></i>
-                                </button>
-
                                 {/* Slot 1: Exportar JSON */}
                                 <button
                                   type="button"
@@ -2865,7 +2836,7 @@ export default function App() {
                           </div>
 
                           <div className="flex items-start justify-between gap-1.5">
-                            <h4 className="text-xs font-black text-slate-900 dark:text-white leading-snug line-clamp-2">
+                            <h4 className="text-xs font-black text-slate-900 dark:text-white leading-snug whitespace-normal break-words">
                               {item.titulo}
                             </h4>
                             <button
@@ -2921,16 +2892,6 @@ export default function App() {
                           <span className="text-[10px] font-mono text-slate-400">{item.fecha}</span>
 
                           <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            <button
-                              type="button"
-                              onClick={() => handleIrAEditarRespuestasEnImportacion(item)}
-                              className="h-7 px-2 rounded-lg text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 text-[10px] font-bold transition-colors cursor-pointer"
-                              title="Acceder a la ventana Importación para editar qué respuestas son correctas y recalcular la nota"
-                            >
-                              <i className="fa-solid fa-check-double text-[9.5px]"></i>
-                              <span>Respuestas</span>
-                            </button>
-
                             <button
                               type="button"
                               onClick={() => solicitarRenombrarExamen(item.id, item.titulo)}
@@ -3351,8 +3312,8 @@ export default function App() {
 
             {/* Ficha resumen del test */}
             <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-xs font-black text-slate-900 dark:text-white line-clamp-1">
+              <div className="flex items-start justify-between gap-2">
+                <h4 className="text-xs font-black text-slate-900 dark:text-white leading-snug whitespace-normal break-words">
                   {examenRecuperarPregunta.titulo}
                 </h4>
                 <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0">
@@ -3428,28 +3389,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Acceso directo para corregir errores de importación de respuestas y recalcular nota */}
-            <button
-              type="button"
-              onClick={() => handleIrAEditarRespuestasEnImportacion(examenRecuperarPregunta)}
-              className="w-full p-3 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/40 text-left transition-all flex items-center justify-between gap-3 cursor-pointer group"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs shrink-0">
-                  <i className="fa-solid fa-check-double"></i>
-                </div>
-                <div>
-                  <span className="text-xs font-black text-emerald-950 dark:text-emerald-200 block">
-                    Corregir respuestas en Importación (recalcula nota)
-                  </span>
-                  <span className="text-[10.5px] text-emerald-800/80 dark:text-emerald-300/80 block">
-                    Edita qué respuestas son correctas o anuladas y actualiza automáticamente tus aciertos, fallos y nota.
-                  </span>
-                </div>
-              </div>
-              <i className="fa-solid fa-arrow-right text-xs text-emerald-700 dark:text-emerald-300 group-hover:translate-x-0.5 transition-transform shrink-0"></i>
-            </button>
-
             <div className="flex justify-end pt-1">
               <button
                 type="button"
@@ -3478,7 +3417,7 @@ export default function App() {
         />
       )}
 
-      {/* MODAL DE VERSIÓN 3.0 Y NOVEDADES DE LA SEMANA */}
+      {/* MODAL DE VERSIÓN 3.2 Y ÚLTIMOS CAMBIOS */}
       {mostrarModalVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -3488,16 +3427,16 @@ export default function App() {
                   <i className="fa-solid fa-code-branch"></i>
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      Notas de Versión v3.1.0
+                      Notas de Versión v3.2.0
                     </h3>
                     <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                      Actualización Semanal + Revisión Pre-Evaluación
+                      Nuevas Normas BOE + Multilínea + Banco y Biblioteca
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Resumen de las mejoras estructurales implementadas esta semana en el Simulador C1 AGE & CAM
+                    Resumen de los últimos cambios y mejoras incorporados al Simulador C1 AGE & CAM
                   </p>
                 </div>
               </div>
@@ -3511,60 +3450,55 @@ export default function App() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-800/80 space-y-1.5">
-                <div className="font-black text-amber-900 dark:text-amber-200 flex items-center gap-2">
-                  <i className="fa-solid fa-clipboard-check text-amber-600"></i>
-                  <span>Novedad v3.1 · Cuadro de Notificación Previo a Evaluar Test o Supuesto</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Al pulsar sobre <strong>Evaluar</strong> en cualquier test, supuesto práctico, simulacro oficial o test de falladas, se abre un cuadro resumen que indica cuántas preguntas se han <strong>respondido</strong>, cuántas quedan <strong>sin responder (en blanco)</strong> y cuántas están marcadas como <strong>dudosas</strong>, permitiendo saltar directamente a revisarlas, <strong>volver al test antes de evaluar</strong> o <strong>evaluar definitivamente</strong>.
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/70 space-y-1.5">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/35 border border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
                 <div className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
-                  <i className="fa-solid fa-building-columns text-emerald-600"></i>
-                  <span>1. Catalogación Independiente «Test oficial» y «Supuesto oficial»</span>
+                  <i className="fa-solid fa-scale-balanced text-emerald-600"></i>
+                  <span>Novedad v3.2 · Ampliación de la Base de Datos de Legislación y Ajustes en Vistas</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Ahora puedes catalogar cualquier prueba como <strong>Test oficial</strong> o <strong>Supuesto oficial</strong> además de por leyes BOE o temas de informática. El buscador y los filtros separan estrictamente ambos mundos: al buscar por leyes o temas no se mezclan los exámenes oficiales completos, y al filtrar por Test/Supuesto oficial no se incluyen los tests sueltos por leyes.
+                  • Incorporados a la base de datos de legislación, generador, catalogadores, Biblioteca y banco de preguntas el <strong>Real Decreto 366/2007</strong> (condiciones de accesibilidad y no discriminación en las relaciones con la AGE), el <strong>IV Convenio Único para el Personal Laboral de la AGE</strong> y el <strong>Real Decreto 951/2005</strong> (marco general para la mejora de la calidad en la AGE).<br />
+                  • <strong>Nombres de test multilínea</strong>: Tanto en el <strong>Banco de Exámenes</strong> como en el <strong>Historial</strong> (vistas Listado y Tarjetas) se permiten varias líneas en el título del test para que se lea completo ajustándose al ancho disponible.<br />
+                  • <strong>Edición de respuestas centralizada en el Banco de Test</strong>: Eliminado el acceso directo desde la ventana Historial para mantener la edición de respuestas correctas exclusivamente en el <strong>Banco de Exámenes</strong> (conservando el recálculo automático de respuestas y nota en los tests ya realizados).
                 </p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/70 space-y-1.5">
                 <div className="font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
-                  <i className="fa-solid fa-landmark-flag text-indigo-600"></i>
-                  <span>2. Nueva Sección «Simulacro Oficial 70+20» con Reserva (+5/+5)</span>
+                  <i className="fa-solid fa-key text-indigo-600"></i>
+                  <span>1. Editor de Respuestas Correctas y Copia de Seguridad Integral Única</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Configuración integral de simulacro de 100 minutos (ajustable): elección entre test del banco filtrando por todas las categorías y ámbitos (con soporte para 70 AGE o 40 CAM + 5 de reserva) o configuración aleatoria con cantidad libre por ley/tema e indicador del total de preguntas disponibles al lado de cada materia, unido a un supuesto práctico de 20 preguntas (+5 reserva).
+                  • Corrección de respuestas (<strong>A, B, C, D o Anulada</strong>) en la ventana de Importación / Banco de Exámenes con recálculo automático de aciertos, fallos, blancos, PD, PT y calificación en el Historial.<br />
+                  • <strong>Copia de Seguridad e Importación única</strong> para todos los aspectos de la app: Banco de Exámenes, Historial, Biblioteca (Dudas y Base de Datos de Enlaces a Documentos), Temas Completados y configuración.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-800/80 space-y-1.5">
+                <div className="font-black text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                  <i className="fa-solid fa-book-bookmark text-amber-600"></i>
+                  <span>2. Sección «Biblioteca» (Dudas + Base de Datos de Documentos y Enlaces)</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  • Dos pestañas independientes: <strong>Dudas y Anotaciones</strong> y <strong>Base de Datos de Documentos y Enlaces</strong> (enlaces a ficheros locales o webs externas sin almacenar archivos pesados, etiquetados por tema AGE C1 / CAM, ley o Real Decreto y subtemas, con vista Listado de 10 registros por página y apertura con doble clic). Incluye también el <strong>RD 1708/2011</strong> del Sistema Español de Archivos y soporte para adjuntar enlaces/ficheros locales en la ventana de justificación de cada pregunta.
                 </p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/70 space-y-1.5">
                 <div className="font-black text-sky-900 dark:text-sky-200 flex items-center gap-2">
-                  <i className="fa-solid fa-laptop-code text-sky-600"></i>
-                  <span>3. Reestructuración Oficial del Temario de Informática (8 Temas AGE + 2 CAM)</span>
+                  <i className="fa-solid fa-clipboard-check text-sky-600"></i>
+                  <span>3. Aviso Pre-Evaluación, Referencia a Convocatoria Oficial y Simulacro 70+20</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Adaptación completa en generador, catalogaciones y simulacros a los <strong>8 temas oficiales de Informática AGE</strong> (Informática básica, Sistema operativo Windows, Explorador de Windows, Word, Excel, Access, Outlook y La Red Internet) más los <strong>2 temas específicos de la Comunidad de Madrid</strong> (Windows 11 + Copilot y Microsoft 365). Incorporada también la <strong>Ley Orgánica 2/2012</strong> de Estabilidad Presupuestaria.
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/70 space-y-1.5">
-                <div className="font-black text-rose-900 dark:text-rose-200 flex items-center gap-2">
-                  <i className="fa-solid fa-rotate text-rose-600"></i>
-                  <span>4. Gestión Inteligente de Preguntas Falladas y Progreso Temático Diario</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Las preguntas acertadas en cualquier test o repaso se descuentan automáticamente del listado de falladas pendientes. Añadido widget de progreso temático diario en el Dashboard principal y barra superior de navegación ensanchada a ancho completo.
+                  • Cuadro de notificación previo a evaluar indicando preguntas <strong>respondidas</strong>, <strong>sin responder</strong> y <strong>dudosas</strong> con opción de volver al test o evaluar.<br />
+                  • Las preguntas procedentes de convocatorias oficiales muestran su referencia oficial en lugar de «Inédita».<br />
+                  • Catalogación independiente «Test oficial» y «Supuesto oficial» y selección libre de cantidad de preguntas por ley o tema con contador de disponibles.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[11px] font-mono text-slate-400">
-                Versión 3.1.0 · Simulador C1 AGE & Comunidad de Madrid
+                Versión 3.2.0 · Simulador C1 AGE & Comunidad de Madrid
               </span>
               <button
                 type="button"

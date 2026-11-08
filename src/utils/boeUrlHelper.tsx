@@ -231,6 +231,40 @@ export const CATALOGO_LEYES_BOE: LeyBOEInfo[] = [
       /\b1708\/2011\b/g,
     ],
   },
+  {
+    clave: 'rd_366_2007_accesibilidad',
+    nombre: 'Real Decreto 366/2007, de 16 de marzo, de condiciones de accesibilidad y no discriminación de las personas con discapacidad en sus relaciones con la AGE',
+    sigla: 'RD 366/2007 Accesibilidad',
+    idBOE: 'BOE-A-2007-6567',
+    urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2007-6567',
+    patrones: [
+      /\b(?:Real\s+Decreto|RD)\s+366\/2007\b/gi,
+      /\b366\/2007\b/g,
+    ],
+  },
+  {
+    clave: 'rd_951_2005_calidad',
+    nombre: 'Real Decreto 951/2005, de 29 de julio, por el que se establece el marco general para la mejora de la calidad en la Administración General del Estado',
+    sigla: 'RD 951/2005 Calidad AGE',
+    idBOE: 'BOE-A-2005-14836',
+    urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2005-14836',
+    patrones: [
+      /\b(?:Real\s+Decreto|RD)\s+951\/2005\b/gi,
+      /\b951\/2005\b/g,
+    ],
+  },
+  {
+    clave: 'iv_convenio_colectivo_age',
+    nombre: 'IV Convenio colectivo único para el personal laboral de la Administración General del Estado',
+    sigla: 'IV Convenio Colectivo Personal Laboral AGE',
+    idBOE: 'BOE-A-2019-7414',
+    urlBOE: 'https://www.boe.es/buscar/act.php?id=BOE-A-2019-7414',
+    patrones: [
+      /\bIV\s+Convenio\s+(?:Colectivo\s+)?[ÚU]nico(?:\s+para\s+el\s+personal\s+laboral\s+de\s+la\s+AGE)?\b/gi,
+      /\bIV\s+Convenio\s+Colectivo\s+(?:de\s+)?Personal\s+Laboral(?:\s+AGE)?\b/gi,
+      /\bConvenio\s+[ÚU]nico\s+(?:para\s+el\s+)?[Pp]ersonal\s+[Ll]aboral\b/gi,
+    ],
+  },
 ];
 
 /**
