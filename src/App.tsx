@@ -49,6 +49,7 @@ import {
   guardarBibliotecaDocumentosEnLocalStorage,
   leerSubtemasBibliotecaDeLocalStorage,
   guardarSubtemasBibliotecaEnLocalStorage,
+  calcularResultadoExamenConReservas,
 } from './utils/jsonExamHelper';
 import { EXAMENES_PRECARGADOS_OFICIALES } from './constants/boeData';
 
@@ -94,6 +95,7 @@ export default function App() {
   const [examenARenombrar, setExamenARenombrar] = useState<{ id: string; titulo: string } | null>(null);
   const [nuevoNombreInput, setNuevoNombreInput] = useState<string>('');
   const [examenRecuperarPregunta, setExamenRecuperarPregunta] = useState<ExamenCompleto | null>(null);
+  const [examenParaEditarRespuestas, setExamenParaEditarRespuestas] = useState<ExamenCompleto | null>(null);
 
   // History filtering & sorting state
   const [busquedaHistorial, setBusquedaHistorial] = useState<string>('');
@@ -1016,6 +1018,187 @@ export default function App() {
     mostrarToast(`Catalogación actualizada (${nuevasLeyes.join(', ')})`, 'exito');
   };
 
+  const handleIrAEditarRespuestasEnImportacion = (examen: ExamenCompleto) => {
+    setExamenRecuperarPregunta(null);
+    setExamenParaEditarRespuestas(examen);
+    setTabActiva('importar_json');
+  };
+
+  const handleGuardarRespuestasCorregidas = (examenCorregido: ExamenCompleto) => {
+    const mapaPorId = new Map<number, PreguntaExamen>();
+    const mapaPorClave = new Map<string, PreguntaExamen>();
+
+    examenCorregido.preguntas.forEach((p) => {
+      mapaPorId.set(p.id, p);
+      const clave = normalizarClavePregunta(p.enunciado);
+      if (clave) mapaPorClave.set(clave, p);
+    });
+
+    const coincideExamenObjetivo = (item: ExamenCompleto): boolean => {
+      if (item.id === examenCorregido.id) return true;
+      if (item.testBaseId && item.testBaseId === examenCorregido.id) return true;
+      if (examenCorregido.testBaseId && (item.id === examenCorregido.testBaseId || item.testBaseId === examenCorregido.testBaseId)) {
+        return true;
+      }
+      if (item.titulo.trim().toLowerCase() === examenCorregido.titulo.trim().toLowerCase()) return true;
+      return false;
+    };
+
+    const sincronizarPreguntasDeExamen = (preguntasOriginales: PreguntaExamen[]): PreguntaExamen[] => {
+      return preguntasOriginales.map((p) => {
+        const corregida = mapaPorId.get(p.id) || mapaPorClave.get(normalizarClavePregunta(p.enunciado));
+        if (!corregida) return p;
+        const letraCorrectaCorregida = corregida.opciones.find((o) => o.esCorrecta)?.id;
+        return {
+          ...p,
+          esAnulada: Boolean(corregida.esAnulada),
+          opciones: p.opciones.map((op) => ({
+            ...op,
+            esCorrecta: !corregida.esAnulada && op.id === letraCorrectaCorregida,
+          })),
+        };
+      });
+    };
+
+    // 1. Actualizar Banco de Exámenes
+    let encontradoEnBanco = false;
+    const nuevoBanco = bancoExamenes.map((item) => {
+      if (!coincideExamenObjetivo(item)) return item;
+      encontradoEnBanco = true;
+      return {
+        ...item,
+        preguntas: sincronizarPreguntasDeExamen(item.preguntas),
+      };
+    });
+
+    if (!encontradoEnBanco) {
+      // Si el examen provenía solo del historial y no estaba en el banco, guardamos su plantilla en el banco también
+      const plantillaParaBanco: ExamenCompleto = {
+        ...examenCorregido,
+        id: examenCorregido.testBaseId || examenCorregido.id,
+        testBaseId: undefined,
+        resultado: undefined,
+      };
+      nuevoBanco.unshift(plantillaParaBanco);
+    }
+    setBancoExamenes(nuevoBanco);
+    guardarEnLocalStorageSeguro('c1_banco_examenes', nuevoBanco);
+
+    // 2. Actualizar Historial de Pruebas y recalcular respuestas, reservas y nota en los tests realizados
+    let intentosRecalculados = 0;
+    let ultimoResultadoRecalculado: { pd: number; pt: number; aciertos: number; fallos: number } | null = null;
+
+    const nuevoHistorial = historialPruebas.map((item) => {
+      if (!coincideExamenObjetivo(item)) return item;
+
+      const preguntasSincronizadas = sincronizarPreguntasDeExamen(item.preguntas);
+
+      if (item.resultado) {
+        const respuestasPrevias = item.resultado.respuestasUsuario || {};
+        const { resultado: nuevoResultado, preguntasConSustitucion } = calcularResultadoExamenConReservas(
+          preguntasSincronizadas,
+          respuestasPrevias,
+          item.tipo,
+          item.resultado.duracionSegundos,
+          item.resultado.fechaRealizacion
+        );
+        intentosRecalculados++;
+        ultimoResultadoRecalculado = {
+          pd: nuevoResultado.puntuacionDirecta,
+          pt: nuevoResultado.puntuacionTransformada,
+          aciertos: nuevoResultado.aciertos,
+          fallos: nuevoResultado.fallos,
+        };
+        registrarRespuestasEnControlFalladas(preguntasConSustitucion, respuestasPrevias);
+        return {
+          ...item,
+          preguntas: preguntasConSustitucion,
+          resultado: nuevoResultado,
+        };
+      }
+
+      return {
+        ...item,
+        preguntas: preguntasSincronizadas,
+      };
+    });
+
+    setHistorialPruebas(nuevoHistorial);
+    guardarEnLocalStorageSeguro('c1_historial_pruebas', nuevoHistorial);
+
+    // 3. Si el examen está abierto actualmente en el visor de simulacro/revisión, actualizarlo también en vivo
+    if (examenSeleccionadoParaTest && coincideExamenObjetivo(examenSeleccionadoParaTest)) {
+      const preguntasSinc = sincronizarPreguntasDeExamen(examenSeleccionadoParaTest.preguntas);
+      if (examenSeleccionadoParaTest.resultado) {
+        const respuestasPrevias = examenSeleccionadoParaTest.resultado.respuestasUsuario || {};
+        const { resultado: nuevoRes, preguntasConSustitucion } = calcularResultadoExamenConReservas(
+          preguntasSinc,
+          respuestasPrevias,
+          examenSeleccionadoParaTest.tipo,
+          examenSeleccionadoParaTest.resultado.duracionSegundos,
+          examenSeleccionadoParaTest.resultado.fechaRealizacion
+        );
+        setExamenSeleccionadoParaTest({
+          ...examenSeleccionadoParaTest,
+          preguntas: preguntasConSustitucion,
+          resultado: nuevoRes,
+        });
+      } else {
+        setExamenSeleccionadoParaTest({
+          ...examenSeleccionadoParaTest,
+          preguntas: preguntasSinc,
+        });
+      }
+    }
+
+    // 4. Sincronizar Almacén de Dudas si alguna pregunta modificada estaba guardada allí
+    setAlmacenDudas((prevAlmacen) => {
+      let huboCambio = false;
+      const nextAlmacen = prevAlmacen.map((item) => {
+        const clave = normalizarClavePregunta(item.enunciado);
+        const corregida = mapaPorClave.get(clave);
+        if (!corregida) return item;
+        const nuevaLetraCorrecta = corregida.esAnulada
+          ? undefined
+          : corregida.opciones.find((o) => o.esCorrecta)?.id;
+        if (item.respuestaCorrecta !== nuevaLetraCorrecta) {
+          huboCambio = true;
+          const respMarcada = item.respuestaUsuario;
+          const nuevoEsFallada = respMarcada && nuevaLetraCorrecta ? respMarcada !== nuevaLetraCorrecta : item.esFallada;
+          return {
+            ...item,
+            respuestaCorrecta: nuevaLetraCorrecta,
+            esFallada: nuevoEsFallada,
+            opciones: item.opciones
+              ? item.opciones.map((op) => ({
+                  ...op,
+                  esCorrecta: !corregida.esAnulada && op.id === nuevaLetraCorrecta,
+                }))
+              : item.opciones,
+            fechaActualizacion: new Date().toISOString(),
+          };
+        }
+        return item;
+      });
+      if (huboCambio) {
+        guardarEnLocalStorageSeguro('c1_almacen_dudas', nextAlmacen);
+      }
+      return huboCambio ? nextAlmacen : prevAlmacen;
+    });
+
+    setVersionFalladasApp((v) => v + 1);
+
+    if (intentosRecalculados > 0 && ultimoResultadoRecalculado) {
+      const infoNota = ultimoResultadoRecalculado as { pd: number; pt: number; aciertos: number; fallos: number };
+      mostrarToast(
+        `Plantilla corregida y nota actualizada en ${intentosRecalculados} intento(s): ${infoNota.pd.toFixed(2)} PD / ${infoNota.pt.toFixed(2)} PT (+${infoNota.aciertos} / -${infoNota.fallos})`,
+        'exito'
+      );
+    } else {
+      mostrarToast(`Plantilla de respuestas actualizada en el Banco de Exámenes`, 'exito');
+    }
+  };
+
   const toggleOrdenColumna = (col: typeof columnaOrden) => {
     if (columnaOrden === col) {
       setDireccionOrden((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -1701,6 +1884,9 @@ export default function App() {
             onCambiarAmbitoExamen={handleCambiarAmbitoExamen}
             onCambiarLeyesExamen={handleCambiarLeyesExamen}
             onRenombrarExamen={(id, tit) => solicitarRenombrarExamen(id, tit)}
+            examenParaEditarRespuestas={examenParaEditarRespuestas}
+            onLimpiarExamenParaEditarRespuestas={() => setExamenParaEditarRespuestas(null)}
+            onGuardarRespuestasCorregidas={handleGuardarRespuestasCorregidas}
           />
         )}
 
@@ -2368,6 +2554,16 @@ export default function App() {
                                     <i className="fa-solid fa-tags text-[8px]"></i>
                                     <span>Catalogar</span>
                                   </button>
+                                  <span>•</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleIrAEditarRespuestasEnImportacion(item)}
+                                    className="text-[9px] text-emerald-700 dark:text-emerald-400 hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
+                                    title="Ir a la ventana Importación para corregir qué respuestas son correctas y recalcular la nota automáticamente"
+                                  >
+                                    <i className="fa-solid fa-check-double text-[8px]"></i>
+                                    <span>Corregir respuestas</span>
+                                  </button>
                                   {item.anotaciones && item.anotaciones.length > 0 && (
                                     <span className="text-amber-600 dark:text-amber-400 font-bold">
                                       • {item.anotaciones.length} notas
@@ -2532,6 +2728,16 @@ export default function App() {
                             {/* ACCIONES (estrictamente alineadas con slots de ancho idéntico) */}
                             <td className="py-2 px-3 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5 w-full">
+                                {/* Slot 0: Editar respuestas correctas en Importación */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleIrAEditarRespuestasEnImportacion(item)}
+                                  className="h-7 w-7 rounded-lg text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-xs transition-colors cursor-pointer shrink-0"
+                                  title="Editar respuestas correctas desde la ventana Importación (actualiza tus respuestas y recalcula tu nota)"
+                                >
+                                  <i className="fa-solid fa-check-double text-[10px]"></i>
+                                </button>
+
                                 {/* Slot 1: Exportar JSON */}
                                 <button
                                   type="button"
@@ -2714,7 +2920,17 @@ export default function App() {
                         <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
                           <span className="text-[10px] font-mono text-slate-400">{item.fecha}</span>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleIrAEditarRespuestasEnImportacion(item)}
+                              className="h-7 px-2 rounded-lg text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 text-[10px] font-bold transition-colors cursor-pointer"
+                              title="Acceder a la ventana Importación para editar qué respuestas son correctas y recalcular la nota"
+                            >
+                              <i className="fa-solid fa-check-double text-[9.5px]"></i>
+                              <span>Respuestas</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => solicitarRenombrarExamen(item.id, item.titulo)}
@@ -3211,6 +3427,28 @@ export default function App() {
                 </span>
               </button>
             </div>
+
+            {/* Acceso directo para corregir errores de importación de respuestas y recalcular nota */}
+            <button
+              type="button"
+              onClick={() => handleIrAEditarRespuestasEnImportacion(examenRecuperarPregunta)}
+              className="w-full p-3 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/40 text-left transition-all flex items-center justify-between gap-3 cursor-pointer group"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs shrink-0">
+                  <i className="fa-solid fa-check-double"></i>
+                </div>
+                <div>
+                  <span className="text-xs font-black text-emerald-950 dark:text-emerald-200 block">
+                    Corregir respuestas en Importación (recalcula nota)
+                  </span>
+                  <span className="text-[10.5px] text-emerald-800/80 dark:text-emerald-300/80 block">
+                    Edita qué respuestas son correctas o anuladas y actualiza automáticamente tus aciertos, fallos y nota.
+                  </span>
+                </div>
+              </div>
+              <i className="fa-solid fa-arrow-right text-xs text-emerald-700 dark:text-emerald-300 group-hover:translate-x-0.5 transition-transform shrink-0"></i>
+            </button>
 
             <div className="flex justify-end pt-1">
               <button

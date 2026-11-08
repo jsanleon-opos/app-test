@@ -1,11 +1,13 @@
-import React, { useState, useMemo } from 'react';
-import { ExamenCompleto, CategoriaExamen, ConvocatoriaAmbito } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ExamenCompleto, CategoriaExamen, ConvocatoriaAmbito, PreguntaExamen } from '../types';
 import { EXAMENES_PRECARGADOS_OFICIALES, PLANTILLA_JSON_EJEMPLO } from '../constants/boeData';
 import {
   parsearTextoOArchivoJSON,
   exportarExamenAJSON,
   asegurarSeparacionYNormativaReserva,
   eliminarReservasYConvertirATodasOrdinarias,
+  calcularResultadoExamenConReservas,
+  normalizarMapaRespuestas,
   CATEGORIAS_EXAMEN_LISTA,
   CATEGORIAS_EXAMEN_INFO,
   AMBITOS_LISTA,
@@ -40,6 +42,92 @@ interface OfficialJsonImporterProps {
   examenesEliminadosIds?: string[];
   historialPruebas?: ExamenCompleto[];
   onVerHistorialDeTest?: (testBaseId: string) => void;
+  examenParaEditarRespuestas?: ExamenCompleto | null;
+  onLimpiarExamenParaEditarRespuestas?: () => void;
+  onGuardarRespuestasCorregidas?: (examenActualizado: ExamenCompleto) => void;
+}
+
+function aplicarClavesTextoAPreguntas(
+  preguntas: PreguntaExamen[],
+  textoClaves: string
+): { preguntasActualizadas: PreguntaExamen[]; totalAplicadas: number } {
+  if (!textoClaves || !textoClaves.trim()) {
+    return { preguntasActualizadas: preguntas, totalAplicadas: 0 };
+  }
+
+  const mapaOrdinarias = new Map<number, 'A' | 'B' | 'C' | 'D' | 'ANULADA'>();
+  const mapaReservas = new Map<number, 'A' | 'B' | 'C' | 'D' | 'ANULADA'>();
+
+  // Soportar formatos: "1.b", "1-b", "1: b", "1) b", "1 b", "R1.c", "Reserva 1: c", "15.ANULADA", "15.X"
+  const regexReserva = /\b(?:R|RESERVA)\s*#?(\d{1,2})\s*[\.\-\:\)\s]+\s*(ANULADA|ANUL|NULA|X|[ABCD])\b/gi;
+  let mRes: RegExpExecArray | null;
+  while ((mRes = regexReserva.exec(textoClaves)) !== null) {
+    const numR = parseInt(mRes[1], 10);
+    const valRaw = mRes[2].toUpperCase();
+    const valor: 'A' | 'B' | 'C' | 'D' | 'ANULADA' =
+      valRaw === 'A' || valRaw === 'B' || valRaw === 'C' || valRaw === 'D' ? valRaw : 'ANULADA';
+    if (numR >= 1 && numR <= 20) {
+      mapaReservas.set(numR, valor);
+    }
+  }
+
+  const textoSinReservas = textoClaves.replace(regexReserva, ' ');
+  const regexOrd = /\b(\d{1,3})\s*(?:[\.\-\:\)]|\s+)\s*(ANULADA|ANUL|NULA|X|[ABCD])\b/gi;
+  let mOrd: RegExpExecArray | null;
+  while ((mOrd = regexOrd.exec(textoSinReservas)) !== null) {
+    const num = parseInt(mOrd[1], 10);
+    const valRaw = mOrd[2].toUpperCase();
+    const valor: 'A' | 'B' | 'C' | 'D' | 'ANULADA' =
+      valRaw === 'A' || valRaw === 'B' || valRaw === 'C' || valRaw === 'D' ? valRaw : 'ANULADA';
+    if (num >= 1 && num <= 300) {
+      mapaOrdinarias.set(num, valor);
+    }
+  }
+
+  let totalAplicadas = 0;
+  let contadorOrd = 0;
+  let contadorRes = 0;
+
+  const preguntasActualizadas = preguntas.map((p) => {
+    let nuevaClave: 'A' | 'B' | 'C' | 'D' | 'ANULADA' | undefined;
+    if (p.esReserva) {
+      contadorRes++;
+      const numR = p.numeroReserva || contadorRes;
+      if (mapaReservas.has(numR)) {
+        nuevaClave = mapaReservas.get(numR);
+      } else if (mapaOrdinarias.has(p.id)) {
+        nuevaClave = mapaOrdinarias.get(p.id);
+      }
+    } else {
+      contadorOrd++;
+      if (mapaOrdinarias.has(p.id)) {
+        nuevaClave = mapaOrdinarias.get(p.id);
+      } else if (mapaOrdinarias.has(contadorOrd)) {
+        nuevaClave = mapaOrdinarias.get(contadorOrd);
+      }
+    }
+
+    if (!nuevaClave) return p;
+    totalAplicadas++;
+
+    if (nuevaClave === 'ANULADA') {
+      return {
+        ...p,
+        esAnulada: true,
+      };
+    }
+
+    return {
+      ...p,
+      esAnulada: false,
+      opciones: p.opciones.map((o) => ({
+        ...o,
+        esCorrecta: o.id === nuevaClave,
+      })),
+    };
+  });
+
+  return { preguntasActualizadas, totalAplicadas };
 }
 
 export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
@@ -54,6 +142,9 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
   examenesEliminadosIds = [],
   historialPruebas = [],
   onVerHistorialDeTest,
+  examenParaEditarRespuestas,
+  onLimpiarExamenParaEditarRespuestas,
+  onGuardarRespuestasCorregidas,
 }) => {
   const [jsonText, setJsonText] = useState('');
   const [eliminarReservasSiNoConstan, setEliminarReservasSiNoConstan] = useState(false);
@@ -67,6 +158,20 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
   const [examenEditandoLeyes, setExamenEditandoLeyes] = useState<ExamenCompleto | null>(null);
   const [mostrarSelectorLeyesImportacion, setMostrarSelectorLeyesImportacion] = useState(false);
   const [nuevoTitulo, setNuevoTitulo] = useState('');
+  const [plantillaRapidaImportacion, setPlantillaRapidaImportacion] = useState('');
+  const [avisoPlantillaImportacion, setAvisoPlantillaImportacion] = useState<string | null>(null);
+
+  // Estado del Editor de Respuestas Correctas (accesible desde Importación y desde Historial)
+  const [editorRespuestas, setEditorRespuestas] = useState<{
+    examenOriginal: ExamenCompleto;
+    preguntasEditadas: PreguntaExamen[];
+    intentoReferencia: ExamenCompleto | null;
+    origenAcceso: 'banco' | 'historial';
+    filtro: 'todas' | 'falladas_intento' | 'modificadas' | 'reservas_anuladas';
+    busqueda: string;
+    plantillaRapida: string;
+    feedback: string | null;
+  } | null>(null);
 
   // Estado del proceso guiado de importación y auditoría
   const [modalImportacion, setModalImportacion] = useState<{
@@ -141,7 +246,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
       }, 750);
 
       const t4 = setTimeout(() => {
-        setModalImportacion((prev) => (prev ? { ...prev, fase: 'auditado' } : null));
+        setModalImportacion((prev) => (prev ? { ...prev, fase: 'auditado', mostrarPreguntas: true } : null));
       }, 1000);
 
       timerProcesoRef.current = [t1, t2, t3, t4];
@@ -150,6 +255,229 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
         `Error al interpretar el examen: ${err.message || 'Formato no reconocido'}. Verifica que las preguntas tengan formato "1.a pregunta." u opciones "a), b), c) y d)".`
       );
     }
+  };
+
+  // Cambiar opción correcta de una pregunta dentro del modal de importación
+  const cambiarOpcionCorrectaEnImportacion = (preguntaIdx: number, nuevaLetra: 'A' | 'B' | 'C' | 'D') => {
+    setModalImportacion((prev) => {
+      if (!prev) return null;
+      const nuevasPreguntas = prev.auditoria.examen.preguntas.map((p, idx) => {
+        if (idx !== preguntaIdx) return p;
+        return {
+          ...p,
+          esAnulada: false,
+          opciones: p.opciones.map((o) => ({
+            ...o,
+            esCorrecta: o.id === nuevaLetra,
+          })),
+        };
+      });
+      const nuevasClaves = nuevasPreguntas.map((p, i) => {
+        const corr = p.opciones.find((o) => o.esCorrecta)?.id || 'A';
+        return { num: p.esReserva ? 100 + (p.numeroReserva || i + 1) : p.id, letra: corr };
+      });
+      return {
+        ...prev,
+        auditoria: {
+          ...prev.auditoria,
+          totalClavesPlantilla: nuevasPreguntas.length,
+          porcentajePlantillaEmparejada: 100,
+          clavesMuestra: nuevasClaves,
+          examen: {
+            ...prev.auditoria.examen,
+            preguntas: nuevasPreguntas,
+          },
+        },
+      };
+    });
+  };
+
+  const toggleAnuladaEnImportacion = (preguntaIdx: number) => {
+    setModalImportacion((prev) => {
+      if (!prev) return null;
+      const nuevasPreguntas = prev.auditoria.examen.preguntas.map((p, idx) => {
+        if (idx !== preguntaIdx) return p;
+        return {
+          ...p,
+          esAnulada: !p.esAnulada,
+        };
+      });
+      return {
+        ...prev,
+        auditoria: {
+          ...prev.auditoria,
+          examen: {
+            ...prev.auditoria.examen,
+            preguntas: nuevasPreguntas,
+          },
+        },
+      };
+    });
+  };
+
+  const handleAplicarPlantillaRapidaEnImportacion = () => {
+    if (!modalImportacion || !plantillaRapidaImportacion.trim()) return;
+    const { preguntasActualizadas, totalAplicadas } = aplicarClavesTextoAPreguntas(
+      modalImportacion.auditoria.examen.preguntas,
+      plantillaRapidaImportacion
+    );
+    if (totalAplicadas === 0) {
+      setAvisoPlantillaImportacion('No se detectaron claves con formato válido (ej: 1.b, 2.a, R1.c).');
+      return;
+    }
+    const nuevasClaves = preguntasActualizadas.map((p, i) => {
+      const corr = p.opciones.find((o) => o.esCorrecta)?.id || 'A';
+      return { num: p.esReserva ? 100 + (p.numeroReserva || i + 1) : p.id, letra: corr };
+    });
+    setModalImportacion((prev) =>
+      prev
+        ? {
+            ...prev,
+            auditoria: {
+              ...prev.auditoria,
+              totalClavesPlantilla: preguntasActualizadas.length,
+              porcentajePlantillaEmparejada: 100,
+              clavesMuestra: nuevasClaves,
+              examen: {
+                ...prev.auditoria.examen,
+                preguntas: preguntasActualizadas,
+              },
+            },
+          }
+        : null
+    );
+    setAvisoPlantillaImportacion(`¡Se han actualizado ${totalAplicadas} respuestas correctas en la importación!`);
+    setPlantillaRapidaImportacion('');
+  };
+
+  // Abrir el Editor de Respuestas Correctas para un examen del Banco o venido desde el Historial
+  const abrirEditorRespuestas = (examen: ExamenCompleto, origen: 'banco' | 'historial' = 'banco') => {
+    const baseId = examen.testBaseId || examen.id.replace(/-intento-\d+$/, '');
+    const intentosRelacionados = (historialPruebas || []).filter(
+      (h) =>
+        (h.id === examen.id ||
+          h.id === baseId ||
+          h.testBaseId === baseId ||
+          h.testBaseId === examen.id) &&
+        Boolean(h.resultado)
+    );
+    const intentoRef = examen.resultado
+      ? examen
+      : intentosRelacionados.length > 0
+      ? intentosRelacionados[0]
+      : null;
+
+    const preguntasClonadas: PreguntaExamen[] = examen.preguntas.map((p) => ({
+      ...p,
+      opciones: p.opciones.map((o) => ({ ...o })),
+    }));
+
+    setEditorRespuestas({
+      examenOriginal: examen,
+      preguntasEditadas: preguntasClonadas,
+      intentoReferencia: intentoRef,
+      origenAcceso: origen,
+      filtro: 'todas',
+      busqueda: '',
+      plantillaRapida: '',
+      feedback: null,
+    });
+  };
+
+  useEffect(() => {
+    if (examenParaEditarRespuestas) {
+      abrirEditorRespuestas(examenParaEditarRespuestas, 'historial');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      onLimpiarExamenParaEditarRespuestas?.();
+    }
+  }, [examenParaEditarRespuestas]);
+
+  const cambiarOpcionCorrectaEnEditor = (preguntaIdx: number, nuevaLetra: 'A' | 'B' | 'C' | 'D') => {
+    setEditorRespuestas((prev) => {
+      if (!prev) return null;
+      const nuevas = prev.preguntasEditadas.map((p, idx) => {
+        if (idx !== preguntaIdx) return p;
+        return {
+          ...p,
+          esAnulada: false,
+          opciones: p.opciones.map((o) => ({
+            ...o,
+            esCorrecta: o.id === nuevaLetra,
+          })),
+        };
+      });
+      return {
+        ...prev,
+        preguntasEditadas: nuevas,
+        feedback: null,
+      };
+    });
+  };
+
+  const toggleAnuladaEnEditor = (preguntaIdx: number) => {
+    setEditorRespuestas((prev) => {
+      if (!prev) return null;
+      const nuevas = prev.preguntasEditadas.map((p, idx) => {
+        if (idx !== preguntaIdx) return p;
+        return {
+          ...p,
+          esAnulada: !p.esAnulada,
+        };
+      });
+      return {
+        ...prev,
+        preguntasEditadas: nuevas,
+        feedback: null,
+      };
+    });
+  };
+
+  const handleAplicarPlantillaRapidaEnEditor = () => {
+    if (!editorRespuestas || !editorRespuestas.plantillaRapida.trim()) return;
+    const { preguntasActualizadas, totalAplicadas } = aplicarClavesTextoAPreguntas(
+      editorRespuestas.preguntasEditadas,
+      editorRespuestas.plantillaRapida
+    );
+    if (totalAplicadas === 0) {
+      setEditorRespuestas((prev) =>
+        prev
+          ? {
+              ...prev,
+              feedback: 'No se reconocieron claves con formato 1.b, 2.a, R1.c o 15.ANULADA.',
+            }
+          : null
+      );
+      return;
+    }
+    setEditorRespuestas((prev) =>
+      prev
+        ? {
+            ...prev,
+            preguntasEditadas: preguntasActualizadas,
+            plantillaRapida: '',
+            feedback: `¡Aplicadas ${totalAplicadas} respuestas correctas en la plantilla! Revisa la previsualización de nota y pulsa Guardar.`,
+          }
+        : null
+    );
+  };
+
+  const handleGuardarCambiosEditorRespuestas = () => {
+    if (!editorRespuestas) return;
+    const examenActualizado: ExamenCompleto = {
+      ...editorRespuestas.examenOriginal,
+      preguntas: editorRespuestas.preguntasEditadas,
+    };
+
+    if (onGuardarRespuestasCorregidas) {
+      onGuardarRespuestasCorregidas(examenActualizado);
+    } else {
+      onExamenCargado(examenActualizado);
+    }
+
+    setMensajeExito(
+      `¡Plantilla de respuestas actualizada en "${examenActualizado.titulo}"! Se han recalculado automáticamente las respuestas y notas de los intentos realizados.`
+    );
+    setEditorRespuestas(null);
   };
 
   const construirExamenImportadoConLeyes = (): ExamenCompleto | null => {
@@ -1082,8 +1410,8 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                         </div>
                       </th>
 
-                      {/* 6. Acciones (ancho fijo de 210px garantizando separación total) */}
-                      <th className="py-2.5 px-3 text-right w-[210px] min-w-[210px]">
+                      {/* 6. Acciones (ancho suficiente garantizando separación total) */}
+                      <th className="py-2.5 px-3 text-right w-[250px] min-w-[250px]">
                         <span>Acciones</span>
                       </th>
                     </tr>
@@ -1141,7 +1469,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                                   </span>
                                 )}
                               </div>
-                              {/* Chip de Estado / Enlace al Historial de Intentos */}
+                              {/* Chip de Estado / Enlace al Historial de Intentos + Editar Respuestas */}
                               <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                                 {!tieneIntentos ? (
                                   <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
@@ -1162,6 +1490,16 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                                     <span className="text-indigo-600 dark:text-indigo-400 text-[8px] underline">Historial ↗</span>
                                   </button>
                                 )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => abrirEditorRespuestas(item, 'banco')}
+                                  className="px-2 py-0.2 rounded text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                                  title="Editar qué respuestas son correctas (si el test ya se realizó, recalcula automáticamente respuestas y nota)"
+                                >
+                                  <i className="fa-solid fa-key text-[8px] text-emerald-600"></i>
+                                  <span>Editar respuestas</span>
+                                </button>
                               </div>
                             </div>
                           </td>
@@ -1296,6 +1634,16 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                           {/* 6. Acciones con slots de ancho fijo rigurosamente alineados y sin colisiones */}
                           <td className="py-2 px-3 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1.5 w-full">
+                              {/* Slot 0: Editar respuestas correctas */}
+                              <button
+                                type="button"
+                                onClick={() => abrirEditorRespuestas(item, 'banco')}
+                                className="h-7 w-7 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                title="Editar qué respuestas son correctas (recalcula nota y respuestas si ya se realizó)"
+                              >
+                                <i className="fa-solid fa-key text-[10px]"></i>
+                              </button>
+
                               {/* Slot 1: Botón tijeras si tiene reservas, o espaciador fijo */}
                               {item.preguntas.some((p) => p.esReserva) ? (
                                 <button
@@ -1497,6 +1845,15 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      <button
+                        type="button"
+                        onClick={() => abrirEditorRespuestas(ex, 'banco')}
+                        className="h-7 px-2 rounded-lg text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 text-[9.5px] font-bold transition-colors cursor-pointer"
+                        title="Editar qué respuestas son correctas (si el test ya se realizó, recalcula automáticamente respuestas y nota)"
+                      >
+                        <i className="fa-solid fa-key text-[9px] text-emerald-600"></i>
+                        <span>Respuestas</span>
+                      </button>
                       {ex.preguntas.some((p) => p.esReserva) && (
                         <button
                           type="button"
@@ -1931,43 +2288,72 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                   </div>
                 </div>
 
-                {/* Visualización de la plantilla extraída (1.b, 2.a...) */}
-                {modalImportacion.auditoria.clavesMuestra.length > 0 && (
-                  <div className="space-y-1.5 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                        <i className="fa-solid fa-key text-[10px] text-amber-500"></i>
-                        <span>Claves de Plantilla Extraídas (Formato 1.b, 2.a):</span>
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">
-                        Total {modalImportacion.auditoria.totalClavesPlantilla} claves
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5 pt-1 max-h-24 overflow-y-auto">
-                      {modalImportacion.auditoria.clavesMuestra.map((c) => (
-                        <span
-                          key={c.num}
-                          className="inline-flex items-center gap-1 py-0.5 px-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300"
-                        >
-                          <span className="text-slate-400">{c.num}.</span>
-                          <span className="text-emerald-600 dark:text-emerald-400 font-black">{c.letra}</span>
-                        </span>
-                      ))}
-                      {modalImportacion.auditoria.totalClavesPlantilla >
-                        modalImportacion.auditoria.clavesMuestra.length && (
-                        <span className="text-[10px] text-slate-400 self-center font-mono">
-                          +{modalImportacion.auditoria.totalClavesPlantilla -
-                            modalImportacion.auditoria.clavesMuestra.length}{' '}
-                          más...
-                        </span>
-                      )}
-                    </div>
+                {/* Visualización e Inyección Rápida de Plantilla en la Importación */}
+                <div className="space-y-2.5 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+                    <span className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                      <i className="fa-solid fa-key text-[10px] text-amber-500"></i>
+                      <span>Plantilla de Respuestas Correctas (puedes corregir cualquier respuesta antes de importar):</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                      Haz clic en A, B, C o D debajo para cambiar cualquier respuesta
+                    </span>
                   </div>
-                )}
 
-                {/* Acordeón para previsualizar las preguntas y respuestas */}
-                <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                  {/* Pegar / aplicar plantilla rápida en texto */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={plantillaRapidaImportacion}
+                      onChange={(e) => setPlantillaRapidaImportacion(e.target.value)}
+                      placeholder="Corregir por lote (ej: 1.b, 2.a, 15.d, R1.c, 22.ANULADA)..."
+                      className="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAplicarPlantillaRapidaEnImportacion}
+                      disabled={!plantillaRapidaImportacion.trim()}
+                      className="py-1.5 px-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center justify-center gap-1.5"
+                    >
+                      <i className="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                      <span>Aplicar Claves</span>
+                    </button>
+                  </div>
+
+                  {avisoPlantillaImportacion && (
+                    <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg">
+                      {avisoPlantillaImportacion}
+                    </div>
+                  )}
+
+                  {/* Mapa compacto de todas las claves actuales */}
+                  <div className="flex flex-wrap gap-1.5 pt-1 max-h-28 overflow-y-auto">
+                    {modalImportacion.auditoria.examen.preguntas.map((p, idx) => {
+                      const corr = p.opciones.find((o) => o.esCorrecta)?.id || 'A';
+                      const etiquetaNum = p.esReserva ? `R${p.numeroReserva || idx + 1}` : `${p.id}`;
+                      return (
+                        <span
+                          key={`${p.id}-${idx}`}
+                          className={`inline-flex items-center gap-1 py-0.5 px-2 border rounded-md text-[10px] font-mono font-bold ${
+                            p.esAnulada
+                              ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300'
+                              : p.esReserva
+                              ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <span className="text-slate-400">{etiquetaNum}.</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-black">
+                            {p.esAnulada ? 'ANUL' : corr}
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Acordeón interactivo para previsualizar y EDITAR las respuestas correctas de todas las preguntas */}
+                <div className="border border-indigo-200 dark:border-indigo-800/80 rounded-xl overflow-hidden">
                   <button
                     type="button"
                     onClick={() =>
@@ -1975,12 +2361,12 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                         prev ? { ...prev, mostrarPreguntas: !prev.mostrarPreguntas } : null
                       )
                     }
-                    className="w-full flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                    className="w-full flex items-center justify-between p-3 bg-indigo-50/70 dark:bg-indigo-950/50 hover:bg-indigo-100/70 dark:hover:bg-indigo-900/50 transition-colors text-xs font-bold text-indigo-900 dark:text-indigo-200 cursor-pointer"
                   >
                     <span className="flex items-center gap-2">
-                      <i className="fa-solid fa-list-ol text-indigo-500"></i>
+                      <i className="fa-solid fa-check-double text-indigo-600 dark:text-indigo-400"></i>
                       <span>
-                        Ver Preguntas y Opciones Detectadas ({modalImportacion.auditoria.totalPreguntas})
+                        Revisar y Editar Respuestas Correctas Pregunta por Pregunta ({modalImportacion.auditoria.totalPreguntas})
                       </span>
                     </span>
                     <i
@@ -1991,40 +2377,78 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                   </button>
 
                   {modalImportacion.mostrarPreguntas && (
-                    <div className="p-3 max-h-56 overflow-y-auto space-y-3 divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-850">
-                      {modalImportacion.auditoria.examen.preguntas.slice(0, 15).map((p, pIdx) => (
-                        <div key={p.id} className="pt-2 first:pt-0 space-y-1.5 text-xs">
-                          <div className="font-bold text-slate-800 dark:text-slate-100">
-                            <span className="text-indigo-600 dark:text-indigo-400 font-mono mr-1.5">
-                              {p.esReserva ? `R${p.numeroReserva || pIdx + 1}.` : `${p.id}.`}
-                            </span>
-                            {p.enunciado}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-4">
-                            {p.opciones.map((o) => (
-                              <div
-                                key={o.id}
-                                className={`py-1 px-2 rounded-lg text-[11px] flex items-start gap-1.5 ${
-                                  o.esCorrecta
-                                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-bold'
-                                    : 'text-slate-600 dark:text-slate-400'
-                                }`}
-                              >
-                                <span className="font-mono font-bold shrink-0">{o.id})</span>
-                                <span>{o.texto}</span>
-                                {o.esCorrecta && (
-                                  <i className="fa-solid fa-circle-check text-emerald-500 text-[10px] ml-auto shrink-0 mt-0.5"></i>
-                                )}
+                    <div className="p-3 max-h-72 overflow-y-auto space-y-3 divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-850">
+                      {modalImportacion.auditoria.examen.preguntas.map((p, pIdx) => {
+                        const letraCorrecta = p.opciones.find((o) => o.esCorrecta)?.id || 'A';
+                        return (
+                          <div key={`${p.id}-${pIdx}`} className="pt-2.5 first:pt-0 space-y-2 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-bold text-slate-800 dark:text-slate-100 leading-snug">
+                                <span className="text-indigo-600 dark:text-indigo-400 font-mono mr-1.5">
+                                  {p.esReserva ? `R${p.numeroReserva || pIdx + 1}.` : `${p.id}.`}
+                                </span>
+                                {p.enunciado}
                               </div>
-                            ))}
+
+                              {/* Botonera rápida A / B / C / D / Anulada */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {(['A', 'B', 'C', 'D'] as const).map((letra) => {
+                                  const activa = !p.esAnulada && letraCorrecta === letra;
+                                  return (
+                                    <button
+                                      key={letra}
+                                      type="button"
+                                      onClick={() => cambiarOpcionCorrectaEnImportacion(pIdx, letra)}
+                                      className={`h-6 w-6 rounded-md font-mono text-[10px] font-black transition-all cursor-pointer border ${
+                                        activa
+                                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs scale-105'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
+                                      }`}
+                                      title={`Marcar ${letra} como respuesta correcta`}
+                                    >
+                                      {letra}
+                                    </button>
+                                  );
+                                })}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAnuladaEnImportacion(pIdx)}
+                                  className={`h-6 px-1.5 rounded-md font-mono text-[9px] font-bold transition-all cursor-pointer border ${
+                                    p.esAnulada
+                                      ? 'bg-rose-600 text-white border-rose-600'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:border-rose-400'
+                                  }`}
+                                  title="Marcar o desmarcar pregunta como Anulada"
+                                >
+                                  Anul.
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-4">
+                              {p.opciones.map((o) => (
+                                <button
+                                  key={o.id}
+                                  type="button"
+                                  onClick={() => cambiarOpcionCorrectaEnImportacion(pIdx, o.id)}
+                                  className={`py-1.5 px-2.5 rounded-lg text-[11px] flex items-start gap-1.5 text-left transition-all cursor-pointer border ${
+                                    o.esCorrecta && !p.esAnulada
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700 font-bold shadow-2xs'
+                                      : 'bg-slate-50/60 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 border-slate-200/70 dark:border-slate-700/70 hover:border-emerald-300'
+                                  }`}
+                                  title={`Clic para establecer la opción ${o.id}) como respuesta correcta`}
+                                >
+                                  <span className="font-mono font-bold shrink-0">{o.id})</span>
+                                  <span className="flex-1">{o.texto}</span>
+                                  {o.esCorrecta && !p.esAnulada && (
+                                    <i className="fa-solid fa-circle-check text-emerald-500 text-[11px] ml-auto shrink-0 mt-0.5"></i>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                      {modalImportacion.auditoria.examen.preguntas.length > 15 && (
-                        <div className="text-center py-2 text-[11px] text-slate-400 font-mono">
-                          ... y {modalImportacion.auditoria.examen.preguntas.length - 15} preguntas más validadas con sus 4 opciones.
-                        </div>
-                      )}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2099,6 +2523,484 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
           subtituloModal="Estas leyes y temas de informática quedarán asignados a este examen importado"
         />
       )}
+
+      {/* MODAL EDITOR DE RESPUESTAS CORRECTAS Y RECÁLCULO AUTOMÁTICO DE NOTA */}
+      {editorRespuestas && (() => {
+        const intentoRef = editorRespuestas.intentoReferencia;
+        const respuestasUsuarioNorm = intentoRef?.resultado?.respuestasUsuario
+          ? normalizarMapaRespuestas(intentoRef.resultado.respuestasUsuario, editorRespuestas.preguntasEditadas)
+          : null;
+
+        const recalculoVivo =
+          intentoRef && intentoRef.resultado && respuestasUsuarioNorm
+            ? calcularResultadoExamenConReservas(
+                editorRespuestas.preguntasEditadas,
+                respuestasUsuarioNorm,
+                editorRespuestas.examenOriginal.tipo,
+                intentoRef.resultado.duracionSegundos || 0,
+                intentoRef.resultado.fechaRealizacion || intentoRef.fecha
+              ).resultado
+            : null;
+
+        const totalModificadas = editorRespuestas.preguntasEditadas.filter((p, idx) => {
+          const orig = editorRespuestas.examenOriginal.preguntas[idx];
+          if (!orig) return false;
+          const corrOrig = orig.opciones.find((o) => o.esCorrecta)?.id;
+          const corrNueva = p.opciones.find((o) => o.esCorrecta)?.id;
+          return corrOrig !== corrNueva || Boolean(orig.esAnulada) !== Boolean(p.esAnulada);
+        }).length;
+
+        const preguntasConIndice = editorRespuestas.preguntasEditadas.map((p, idx) => ({ p, idx }));
+        const preguntasFiltradasEditor = preguntasConIndice.filter(({ p, idx }) => {
+          if (editorRespuestas.busqueda.trim()) {
+            const q = editorRespuestas.busqueda.trim().toLowerCase();
+            const numStr = p.esReserva ? `r${p.numeroReserva || idx + 1}` : `${p.id}`;
+            const coincideTexto =
+              numStr.includes(q) ||
+              p.enunciado.toLowerCase().includes(q) ||
+              p.opciones.some((o) => o.texto.toLowerCase().includes(q));
+            if (!coincideTexto) return false;
+          }
+
+          if (editorRespuestas.filtro === 'falladas_intento' && respuestasUsuarioNorm) {
+            const respU = respuestasUsuarioNorm[idx];
+            const corr = p.opciones.find((o) => o.esCorrecta)?.id;
+            return Boolean(respU && respU !== corr);
+          }
+
+          if (editorRespuestas.filtro === 'modificadas') {
+            const orig = editorRespuestas.examenOriginal.preguntas[idx];
+            if (!orig) return false;
+            const corrOrig = orig.opciones.find((o) => o.esCorrecta)?.id;
+            const corrNueva = p.opciones.find((o) => o.esCorrecta)?.id;
+            return corrOrig !== corrNueva || Boolean(orig.esAnulada) !== Boolean(p.esAnulada);
+          }
+
+          if (editorRespuestas.filtro === 'reservas_anuladas') {
+            return Boolean(p.esReserva || p.esAnulada);
+          }
+
+          return true;
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-5xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[92vh] space-y-4">
+              {/* Cabecera del Editor */}
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-start gap-3">
+                  <div className="h-11 w-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-sm ring-4 ring-emerald-500/15 shrink-0">
+                    <i className="fa-solid fa-key"></i>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-tight">
+                        Editor de Respuestas Correctas y Plantilla Oficial
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-black">
+                        {editorRespuestas.origenAcceso === 'historial'
+                          ? 'Abierto desde Historial → Ventana Importación'
+                          : 'Ventana Importación / Banco de Exámenes'}
+                      </span>
+                      {totalModificadas > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 font-mono text-[10px] font-black">
+                          {totalModificadas} {totalModificadas === 1 ? 'respuesta modificada' : 'respuestas modificadas'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                      {editorRespuestas.examenOriginal.titulo}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Selecciona qué opción (<strong>A, B, C o D</strong>) es la correcta en cada pregunta para corregir errores de importación. Si el test ya fue realizado, <strong>se actualizarán automáticamente tus aciertos/fallos y la nota en el Historial</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setEditorRespuestas(null)}
+                  className="h-8 w-8 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer shrink-0"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+
+              {/* Panel en vivo de Recálculo de Nota si el test ya ha sido realizado */}
+              {intentoRef && intentoRef.resultado && recalculoVivo && (
+                <div className="p-3.5 rounded-2xl bg-linear-to-r from-indigo-50/90 via-emerald-50/60 to-white dark:from-indigo-950/40 dark:via-emerald-950/30 dark:to-slate-800 border border-indigo-200 dark:border-indigo-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 text-xs font-black text-indigo-950 dark:text-indigo-200">
+                      <i className="fa-solid fa-calculator text-indigo-600 dark:text-indigo-400"></i>
+                      <span>Recálculo Automático en Vivo del Test Realizado:</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                      Al guardar, todos los intentos de este examen en tu Historial actualizarán sus respuestas corregidas y su nota oficial.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 flex-wrap font-mono text-xs">
+                    <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                      <span className="text-[9.5px] uppercase text-slate-400 block font-sans font-bold">
+                        Antes
+                      </span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {Number(intentoRef.resultado.puntuacionDirecta).toFixed(2)} PD ·{' '}
+                        {Number(intentoRef.resultado.puntuacionTransformada).toFixed(2)} PT
+                      </span>
+                      <span className="text-[10px] text-slate-400 block">
+                        +{intentoRef.resultado.aciertos} / -{intentoRef.resultado.fallos} / {intentoRef.resultado.blancos}b
+                      </span>
+                    </div>
+
+                    <i className="fa-solid fa-arrow-right text-indigo-500"></i>
+
+                    <div className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/70 border-2 border-emerald-400 dark:border-emerald-700 shadow-xs">
+                      <span className="text-[9.5px] uppercase text-emerald-700 dark:text-emerald-300 block font-sans font-black">
+                        Nueva Nota Actualizada
+                      </span>
+                      <span className="font-black text-emerald-800 dark:text-emerald-200">
+                        {Number(recalculoVivo.puntuacionDirecta).toFixed(2)} PD ·{' '}
+                        {Number(recalculoVivo.puntuacionTransformada).toFixed(2)} PT
+                      </span>
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block">
+                        +{recalculoVivo.aciertos} aciertos / -{recalculoVivo.fallos} fallos / {recalculoVivo.blancos} blancos
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Barra de aplicación rápida por lote + Mapa rápido de claves */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <i className="fa-solid fa-paste absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input
+                      type="text"
+                      value={editorRespuestas.plantillaRapida}
+                      onChange={(e) =>
+                        setEditorRespuestas((prev) =>
+                          prev ? { ...prev, plantillaRapida: e.target.value } : null
+                        )
+                      }
+                      placeholder="Pegar corrección rápida en bloque (ej: 1.b, 2.a, 14.d, R1.c, 20.ANULADA)..."
+                      className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAplicarPlantillaRapidaEnEditor}
+                    disabled={!editorRespuestas.plantillaRapida.trim()}
+                    className="py-1.5 px-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    <i className="fa-solid fa-bolt text-[10px] text-amber-300"></i>
+                    <span>Aplicar Claves en Lote</span>
+                  </button>
+                </div>
+
+                {editorRespuestas.feedback && (
+                  <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-xl">
+                    {editorRespuestas.feedback}
+                  </div>
+                )}
+
+                {/* Filtros y buscador de preguntas dentro del editor */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditorRespuestas((prev) => (prev ? { ...prev, filtro: 'todas' } : null))
+                      }
+                      className={`py-1 px-2.5 rounded-lg text-[11px] font-bold cursor-pointer transition-all ${
+                        editorRespuestas.filtro === 'todas'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      Todas ({editorRespuestas.preguntasEditadas.length})
+                    </button>
+
+                    {respuestasUsuarioNorm && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditorRespuestas((prev) =>
+                            prev ? { ...prev, filtro: 'falladas_intento' } : null
+                          )
+                        }
+                        className={`py-1 px-2.5 rounded-lg text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1 ${
+                          editorRespuestas.filtro === 'falladas_intento'
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                        }`}
+                      >
+                        <i className="fa-solid fa-circle-xmark text-[10px]"></i>
+                        <span>
+                          Falladas en tu intento (
+                          {
+                            editorRespuestas.preguntasEditadas.filter((p, i) => {
+                              const r = respuestasUsuarioNorm[i];
+                              const c = p.opciones.find((o) => o.esCorrecta)?.id;
+                              return Boolean(r && r !== c);
+                            }).length
+                          }
+                          )
+                        </span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditorRespuestas((prev) => (prev ? { ...prev, filtro: 'modificadas' } : null))
+                      }
+                      className={`py-1 px-2.5 rounded-lg text-[11px] font-bold cursor-pointer transition-all ${
+                        editorRespuestas.filtro === 'modificadas'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                      }`}
+                    >
+                      Modificadas ({totalModificadas})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditorRespuestas((prev) =>
+                          prev ? { ...prev, filtro: 'reservas_anuladas' } : null
+                        )
+                      }
+                      className={`py-1 px-2.5 rounded-lg text-[11px] font-bold cursor-pointer transition-all ${
+                        editorRespuestas.filtro === 'reservas_anuladas'
+                          ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      Reservas / Anuladas (
+                      {editorRespuestas.preguntasEditadas.filter((p) => p.esReserva || p.esAnulada).length})
+                    </button>
+                  </div>
+
+                  <div className="relative min-w-[220px]">
+                    <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
+                    <input
+                      type="text"
+                      value={editorRespuestas.busqueda}
+                      onChange={(e) =>
+                        setEditorRespuestas((prev) =>
+                          prev ? { ...prev, busqueda: e.target.value } : null
+                        )
+                      }
+                      placeholder="Buscar nº pregunta o texto..."
+                      className="w-full pl-7 pr-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Listado de preguntas para editar la opción correcta */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {preguntasFiltradasEditor.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-400 font-medium border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+                    No hay preguntas que coincidan con el filtro seleccionado.
+                  </div>
+                ) : (
+                  preguntasFiltradasEditor.map(({ p, idx }) => {
+                    const letraCorrectaActual = p.opciones.find((o) => o.esCorrecta)?.id || 'A';
+                    const orig = editorRespuestas.examenOriginal.preguntas[idx];
+                    const letraCorrectaOrig = orig?.opciones.find((o) => o.esCorrecta)?.id || 'A';
+                    const fueModificada =
+                      letraCorrectaActual !== letraCorrectaOrig ||
+                      Boolean(p.esAnulada) !== Boolean(orig?.esAnulada);
+                    const respUsuario = respuestasUsuarioNorm ? respuestasUsuarioNorm[idx] : undefined;
+                    const esAciertoConClaveActual =
+                      Boolean(respUsuario) && !p.esAnulada && respUsuario === letraCorrectaActual;
+
+                    return (
+                      <div
+                        key={`edit-q-${p.id}-${idx}`}
+                        className={`p-3.5 rounded-2xl border transition-all space-y-2.5 ${
+                          fueModificada
+                            ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700 shadow-xs'
+                            : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`px-2 py-0.5 rounded-md font-mono text-xs font-black ${
+                                p.esReserva
+                                  ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                  : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                              }`}
+                            >
+                              {p.esReserva ? `Reserva R${p.numeroReserva || idx + 1}` : `Pregunta #${p.id}`}
+                            </span>
+
+                            <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                              Correcta: {p.esAnulada ? 'ANULADA' : letraCorrectaActual}
+                            </span>
+
+                            {fueModificada && (
+                              <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded">
+                                Antes: {orig?.esAnulada ? 'ANULADA' : letraCorrectaOrig} → Ahora:{' '}
+                                {p.esAnulada ? 'ANULADA' : letraCorrectaActual}
+                              </span>
+                            )}
+
+                            {respuestasUsuarioNorm && (
+                              <span
+                                className={`text-[10.5px] font-mono font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${
+                                  !respUsuario
+                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                                    : esAciertoConClaveActual
+                                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                                    : 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700'
+                                }`}
+                              >
+                                <i
+                                  className={`fa-solid ${
+                                    !respUsuario
+                                      ? 'fa-minus'
+                                      : esAciertoConClaveActual
+                                      ? 'fa-check'
+                                      : 'fa-xmark'
+                                  } text-[9px]`}
+                                ></i>
+                                <span>
+                                  Tu respuesta: {respUsuario || 'En blanco'}{' '}
+                                  {respUsuario
+                                    ? esAciertoConClaveActual
+                                      ? '(Acierto)'
+                                      : '(Fallo)'
+                                    : ''}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Selector rápido A / B / C / D / Anulada */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] font-bold text-slate-400 mr-1">
+                              Marcar correcta:
+                            </span>
+                            {(['A', 'B', 'C', 'D'] as const).map((letra) => {
+                              const esActiva = !p.esAnulada && letraCorrectaActual === letra;
+                              return (
+                                <button
+                                  key={letra}
+                                  type="button"
+                                  onClick={() => cambiarOpcionCorrectaEnEditor(idx, letra)}
+                                  className={`h-7 w-7 rounded-lg font-mono text-xs font-black transition-all cursor-pointer border ${
+                                    esActiva
+                                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs scale-105'
+                                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:border-emerald-400'
+                                  }`}
+                                  title={`Establecer ${letra} como respuesta correcta`}
+                                >
+                                  {letra}
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={() => toggleAnuladaEnEditor(idx)}
+                              className={`h-7 px-2 rounded-lg font-mono text-[10px] font-bold transition-all cursor-pointer border ${
+                                p.esAnulada
+                                  ? 'bg-rose-600 text-white border-rose-600'
+                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-rose-400'
+                              }`}
+                              title="Marcar o desmarcar pregunta como Anulada (activa reserva si dispone de ella)"
+                            >
+                              {p.esAnulada ? 'Anulada ✓' : 'Anular'}
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-relaxed">
+                          {p.enunciado}
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {p.opciones.map((o) => {
+                            const esCorrecta = o.esCorrecta && !p.esAnulada;
+                            const fueMarcadaPorUsuario = respUsuario === o.id;
+                            return (
+                              <button
+                                key={o.id}
+                                type="button"
+                                onClick={() => cambiarOpcionCorrectaEnEditor(idx, o.id)}
+                                className={`p-2.5 rounded-xl text-xs flex items-start gap-2 text-left transition-all cursor-pointer border ${
+                                  esCorrecta
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border-emerald-500 dark:border-emerald-600 font-bold ring-1 ring-emerald-500/20'
+                                    : fueMarcadaPorUsuario
+                                    ? 'bg-rose-50/70 dark:bg-rose-950/30 text-slate-700 dark:text-slate-200 border-rose-300 dark:border-rose-800'
+                                    : 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
+                                }`}
+                              >
+                                <span
+                                  className={`h-5 w-5 rounded-md font-mono text-[11px] font-black flex items-center justify-center shrink-0 ${
+                                    esCorrecta
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                  }`}
+                                >
+                                  {o.id}
+                                </span>
+                                <span className="flex-1 leading-snug">{o.texto}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {fueMarcadaPorUsuario && (
+                                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold">
+                                      Tu resp.
+                                    </span>
+                                  )}
+                                  {esCorrecta && (
+                                    <i className="fa-solid fa-circle-check text-emerald-600 dark:text-emerald-400 text-sm"></i>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer con botones de Acción */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <i className="fa-solid fa-circle-info text-indigo-500"></i>
+                  <span>
+                    Los cambios se aplicarán al Banco de Exámenes y actualizarán automáticamente las respuestas, nota y estadísticas en el Historial.
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditorRespuestas(null)}
+                    className="py-2 px-4 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGuardarCambiosEditorRespuestas}
+                    className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                  >
+                    <i className="fa-solid fa-floppy-disk"></i>
+                    <span>Guardar Respuestas Correctas y Actualizar Nota</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
