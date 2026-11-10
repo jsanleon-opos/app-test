@@ -51,6 +51,7 @@ interface SeccionSimulacroOficialProps {
   ) => void;
   onCambiarAmbitoExamen?: (examenId: string, nuevoAmbito: ConvocatoriaAmbito) => void;
   onCambiarCategoriaExamen?: (examenId: string, nuevaCategoria: CategoriaExamen) => void;
+  onExportarExamenPDF?: (examen: ExamenCompleto) => void;
 }
 
 interface GrupoLeyOTemaDisponible {
@@ -120,6 +121,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
   onRegistrarResultadoPreguntas,
   onCambiarAmbitoExamen,
   onCambiarCategoriaExamen,
+  onExportarExamenPDF,
 }) => {
   // Configuración general de la Prueba Unificada
   const [duracionMinutos, setDuracionMinutos] = useState<number>(100);
@@ -1790,6 +1792,18 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
             <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
               {totalContestadas} / {totalPreguntas} contestadas
             </span>
+
+            {onExportarExamenPDF && (
+              <button
+                type="button"
+                onClick={() => onExportarExamenPDF(simulacroActivo)}
+                className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 text-xs font-black shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Exportar Simulacro Oficial completo (1.ª Parte + Supuesto + Reservas) en PDF oficial + Plantilla de hoja de respuestas en blanco"
+              >
+                <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400"></i>
+                <span>Exportar PDF</span>
+              </button>
+            )}
 
             {!simulacroFinalizado ? (
               <button

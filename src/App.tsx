@@ -16,6 +16,11 @@ import { SeccionBibliotecaView } from './components/SeccionBibliotecaView';
 import { ProgresoTematicoDiarioWidget } from './components/ProgresoTematicoDiarioWidget';
 import { SeccionTestPreguntasFalladas } from './components/SeccionTestPreguntasFalladas';
 import { SelectorLeyesEInformaticaModal } from './components/SelectorLeyesEInformaticaModal';
+import { ExportarExamenPdfModal } from './components/ExportarExamenPdfModal';
+import {
+  exportarExamenYPlantillaOficialPDF,
+  ResultadoGeneracionPDFOficial,
+} from './utils/officialPdfExporter';
 import {
   CATEGORIAS_TEMARIO_PROGRESO,
   CategoriaTemarioId,
@@ -88,6 +93,10 @@ export default function App() {
   const [mostrarModalBackup, setMostrarModalBackup] = useState<boolean>(false);
   const [mostrarModalVersion, setMostrarModalVersion] = useState<boolean>(false);
   const [examenEditandoLeyesHistorial, setExamenEditandoLeyesHistorial] = useState<ExamenCompleto | null>(null);
+  const [exportacionPDFActiva, setExportacionPDFActiva] = useState<{
+    examen: ExamenCompleto;
+    paquete: ResultadoGeneracionPDFOficial;
+  } | null>(null);
   const [toastNotificacion, setToastNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
 
   // History format toggle ('listado' with all metrics vs 'tarjetas')
@@ -114,6 +123,20 @@ export default function App() {
   const mostrarToast = (texto: string, tipo: 'exito' | 'error' | 'info' = 'exito') => {
     setToastNotificacion({ texto, tipo });
     setTimeout(() => setToastNotificacion(null), 4000);
+  };
+
+  const handleExportarExamenAPDF = (examen: ExamenCompleto) => {
+    try {
+      const paquete = exportarExamenYPlantillaOficialPDF(examen);
+      setExportacionPDFActiva({ examen, paquete });
+      mostrarToast(
+        `Exportado "${examen.titulo}" en PDF oficial + Plantilla de hoja de respuestas en blanco.`,
+        'exito'
+      );
+    } catch (err) {
+      console.error('Error al exportar examen a PDF oficial:', err);
+      mostrarToast('No se pudo generar la exportación en PDF de esta prueba.', 'error');
+    }
   };
 
   const [examenesEliminadosIds, setExamenesEliminadosIds] = useState<string[]>(() => {
@@ -1594,10 +1617,10 @@ export default function App() {
                     type="button"
                     onClick={() => setMostrarModalVersion(true)}
                     className="text-[9px] sm:text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 font-mono inline-flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                    title="Ver novedades y últimos cambios de la Versión 3.3"
+                    title="Ver novedades y últimos cambios de la Versión 3.4"
                   >
                     <i className="fa-solid fa-sparkles text-[8px] text-amber-300"></i>
-                    <span>v3.3 · Novedades</span>
+                    <span>v3.4 · Novedades</span>
                   </button>
                   <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-mono flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -1626,7 +1649,7 @@ export default function App() {
                     className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
                   >
                     <i className="fa-solid fa-clock-rotate-left text-[8.5px]"></i>
-                    <span>Actualización v3.3 (Marcado compacto ✓/✗ sin desplazar Siguiente + Contraste de cuadros + Nuevas normas BOE)</span>
+                    <span>Actualización v3.4 (Exportación PDF en formato oficial + Hoja oficial de respuestas en blanco)</span>
                   </button>
                 </p>
               </div>
@@ -1638,10 +1661,10 @@ export default function App() {
                 type="button"
                 onClick={() => setMostrarModalVersion(true)}
                 className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                title="Notas de la versión 3.3 y últimos cambios implementados"
+                title="Notas de la versión 3.4 y últimos cambios implementados"
               >
                 <i className="fa-solid fa-code-branch text-emerald-600 dark:text-emerald-400 text-[11px]"></i>
-                <span className="hidden sm:inline">Versión 3.3</span>
+                <span className="hidden sm:inline">Versión 3.4</span>
               </button>
 
               <button
@@ -1809,6 +1832,7 @@ export default function App() {
             onGuardarEnAlmacenDudas={handleGuardarItemAlmacen}
             onActualizarPreguntaGlobal={handleActualizarPreguntaGlobal}
             onRegistrarResultadoPreguntas={handleRegistrarResultadoPreguntas}
+            onExportarExamenPDF={handleExportarExamenAPDF}
           />
         </div>
 
@@ -1830,6 +1854,7 @@ export default function App() {
             onIrAHistorial={() => setTabActiva('historial')}
             onActualizarPreguntaGlobal={handleActualizarPreguntaGlobal}
             onRegistrarResultadoPreguntas={handleRegistrarResultadoPreguntas}
+            onExportarExamenPDF={handleExportarExamenAPDF}
           />
         )}
 
@@ -1852,6 +1877,7 @@ export default function App() {
             onRegistrarResultadoPreguntas={handleRegistrarResultadoPreguntas}
             onCambiarAmbitoExamen={handleCambiarAmbitoExamen}
             onCambiarCategoriaExamen={handleCambiarCategoriaExamen}
+            onExportarExamenPDF={handleExportarExamenAPDF}
           />
         )}
 
@@ -1878,6 +1904,7 @@ export default function App() {
             onCambiarLeyesExamen={handleCambiarLeyesExamen}
             onRenombrarExamen={(id, tit) => solicitarRenombrarExamen(id, tit)}
             onGuardarRespuestasCorregidas={handleGuardarRespuestasCorregidas}
+            onExportarExamenPDF={handleExportarExamenAPDF}
           />
         )}
 
@@ -2463,7 +2490,7 @@ export default function App() {
                         </th>
 
                         {/* 9. Acciones */}
-                        <th className="py-2.5 px-3 text-right w-[200px] min-w-[200px]">
+                        <th className="py-2.5 px-3 text-right w-[234px] min-w-[234px]">
                           <span>Acciones</span>
                         </th>
                       </tr>
@@ -2709,6 +2736,16 @@ export default function App() {
                             {/* ACCIONES (estrictamente alineadas con slots de ancho idéntico) */}
                             <td className="py-2 px-3 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5 w-full">
+                                {/* Slot 0: Exportar en PDF oficial + Plantilla hoja de respuestas en blanco */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleExportarExamenAPDF(item)}
+                                  className="h-7 w-7 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 flex items-center justify-center text-xs transition-colors cursor-pointer shrink-0"
+                                  title="Exportar este test o supuesto en PDF oficial + Plantilla oficial de hoja de respuestas en blanco"
+                                >
+                                  <i className="fa-solid fa-file-pdf text-[10.5px]"></i>
+                                </button>
+
                                 {/* Slot 1: Exportar JSON */}
                                 <button
                                   type="button"
@@ -2899,6 +2936,16 @@ export default function App() {
                               title="Renombrar examen"
                             >
                               <i className="fa-solid fa-pen-to-square"></i>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleExportarExamenAPDF(item)}
+                              className="h-7 px-2 rounded-lg bg-rose-50/80 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1 text-[10px] font-bold transition-colors cursor-pointer"
+                              title="Exportar en PDF oficial + Plantilla oficial de hoja de respuestas en blanco"
+                            >
+                              <i className="fa-solid fa-file-pdf text-[10px] text-rose-600 dark:text-rose-400"></i>
+                              <span>PDF</span>
                             </button>
 
                             <button
@@ -3417,7 +3464,15 @@ export default function App() {
         />
       )}
 
-      {/* MODAL DE VERSIÓN 3.3 Y ÚLTIMOS CAMBIOS */}
+      {/* MODAL DE EXPORTACIÓN EN PDF OFICIAL + PLANTILLA DE HOJA DE RESPUESTAS EN BLANCO */}
+      <ExportarExamenPdfModal
+        examen={exportacionPDFActiva?.examen || null}
+        paqueteInicial={exportacionPDFActiva?.paquete || null}
+        supuestosDisponibles={bancoExamenes}
+        onClose={() => setExportacionPDFActiva(null)}
+      />
+
+      {/* MODAL DE VERSIÓN 3.4 Y ÚLTIMOS CAMBIOS */}
       {mostrarModalVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border-2 border-slate-300 dark:border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -3429,10 +3484,10 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      Notas de Versión v3.3.0
+                      Notas de Versión v3.4.0
                     </h3>
-                    <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                      Marcado Fijo ✓/✗ + Sin Duplicidad BOE + Contraste de Cuadros
+                    <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
+                      PDF Formato Oficial + Plantilla OMR en Blanco
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -3450,16 +3505,26 @@ export default function App() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
-                <div className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
-                  <i className="fa-solid fa-check-double text-emerald-600"></i>
-                  <span>Novedad v3.3 · Marcado Limpio de Respuestas, Tamaño Fijo y Diferenciación de Cuadros</span>
+              <div className="p-3.5 rounded-2xl bg-rose-50/90 dark:bg-rose-950/40 border-2 border-rose-300 dark:border-rose-800/80 space-y-1.5">
+                <div className="font-black text-rose-900 dark:text-rose-200 flex items-center gap-2">
+                  <i className="fa-solid fa-file-pdf text-rose-600"></i>
+                  <span>Novedad v3.4 · Exportación de Tests y Supuestos en PDF Oficial + Plantilla Hoja de Respuestas</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • <strong>Eliminada la información legal duplicada al responder</strong>: Suprimidos el bloque explicativo bajo cada opción y el recuadro inferior de «Fundamentación Oficial BOE» para no desplazar ni ocultar el botón <strong>Siguiente</strong> (toda la fundamentación sigue disponible en el botón <strong>Justificación</strong>).<br />
-                  • <strong>Tonos suaves + visado verde (✓) y aspa roja (✗)</strong>: Menor intensidad de verde y rojo en las opciones marcadas, con icono de visado en verde para acertadas y aspa en rojo para falladas.<br />
-                  • <strong>Altura invariable en la zona de preguntas</strong>: El tamaño del recuadro de preguntas no varía al responder, manteniendo <strong>Anterior / Justificación / Siguiente</strong> siempre en la misma posición.<br />
-                  • <strong>Mayor diferenciación cromática entre cuadros</strong>: Contraste reforzado entre el fondo general y los distintos paneles y bloques de toda la aplicación.
+                  • <strong>Cuadernillo PDF con maquetación oficial CPS/INAP</strong>: Cabeceras encuadradas (<em>PRIMERA PARTE</em>, <em>SUPUESTO I</em>, <em>SUPUESTO II</em>), enunciados numerados en negrita justificados, opciones <em>a) b) c) d)</em> en doble columna automática cuando son breves o columna completa, bloque subrayado de <em>Preguntas de reserva</em>, pie oficial con código de modelo y <em>Página X de Y</em>, y hoja final opcional de <em>Plantilla Definitiva de Respuestas</em>.<br />
+                  • <strong>Plantilla Oficial de Hoja de Respuestas OMR en cada exportación</strong>: Se genera automáticamente la hoja oficial verde (<em>Ejemplar para el interesado</em>) con casillas de datos en blanco, recuadro de firma vacío, Primera Parte (1–70 + 5 de reserva) y Segunda Parte Supuesto Práctico (Supuesto I/II + 1–20 + 5 de reserva), descartando cualquier dato personal o respuesta marcada.<br />
+                  • <strong>Disponible en todas las secciones</strong>: Generador IA, Simulacro Oficial 70+20, Test de Falladas, Banco de Exámenes e Historial, con opción de descargar por separado o unido en un único PDF.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
+                <div className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                  <i className="fa-solid fa-check-double text-emerald-600"></i>
+                  <span>Versión 3.3 · Marcado Limpio de Respuestas, Tamaño Fijo y Diferenciación de Cuadros</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  • <strong>Eliminada la información legal duplicada al responder</strong> y <strong>altura invariable en la zona de preguntas</strong> para mantener <strong>Anterior / Justificación / Siguiente</strong> fijos.<br />
+                  • <strong>Tonos suaves + visado verde (✓) y aspa roja (✗)</strong> y mayor diferenciación cromática entre cuadros.
                 </p>
               </div>
 
@@ -3469,7 +3534,7 @@ export default function App() {
                   <span>Versión 3.2 · Ampliación de la Base de Datos de Legislación y Ajustes en Vistas</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • Incorporados a la base de datos de legislación, generador, catalogadores, Biblioteca y banco de preguntas el <strong>Real Decreto 366/2007</strong> (condiciones de accesibilidad y no discriminación en las relaciones con la AGE), el <strong>IV Convenio Único para el Personal Laboral de la AGE</strong> y el <strong>Real Decreto 951/2005</strong> (marco general para la mejora de la calidad en la AGE).<br />
+                  • Incorporados el <strong>Real Decreto 366/2007</strong>, el <strong>IV Convenio Único para el Personal Laboral de la AGE</strong> y el <strong>Real Decreto 951/2005</strong>.<br />
                   • <strong>Nombres de test multilínea</strong> y <strong>edición de respuestas centralizada en el Banco de Test</strong> con recálculo automático en Historial.
                 </p>
               </div>
@@ -3494,23 +3559,11 @@ export default function App() {
                   • Dos pestañas independientes: <strong>Dudas y Anotaciones</strong> y <strong>Base de Datos de Documentos y Enlaces</strong> (enlaces a ficheros locales o webs externas sin almacenar archivos pesados, etiquetados por tema AGE C1 / CAM, ley o Real Decreto y subtemas, con vista Listado de 10 registros por página y apertura con doble clic). Incluye también el <strong>RD 1708/2011</strong> del Sistema Español de Archivos y soporte para adjuntar enlaces/ficheros locales en la ventana de justificación de cada pregunta.
                 </p>
               </div>
-
-              <div className="p-3.5 rounded-2xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/70 space-y-1.5">
-                <div className="font-black text-sky-900 dark:text-sky-200 flex items-center gap-2">
-                  <i className="fa-solid fa-clipboard-check text-sky-600"></i>
-                  <span>3. Aviso Pre-Evaluación, Referencia a Convocatoria Oficial y Simulacro 70+20</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • Cuadro de notificación previo a evaluar indicando preguntas <strong>respondidas</strong>, <strong>sin responder</strong> y <strong>dudosas</strong> con opción de volver al test o evaluar.<br />
-                  • Las preguntas procedentes de convocatorias oficiales muestran su referencia oficial en lugar de «Inédita».<br />
-                  • Catalogación independiente «Test oficial» y «Supuesto oficial» y selección libre de cantidad de preguntas por ley o tema con contador de disponibles.
-                </p>
-              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[11px] font-mono text-slate-400">
-                Versión 3.3.0 · Simulador C1 AGE & Comunidad de Madrid
+                Versión 3.4.0 · Simulador C1 AGE & Comunidad de Madrid
               </span>
               <button
                 type="button"

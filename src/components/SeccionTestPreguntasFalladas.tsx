@@ -30,6 +30,7 @@ interface SeccionTestPreguntasFalladasProps {
     preguntas: PreguntaExamen[],
     respuestas: Record<number, string>
   ) => void;
+  onExportarExamenPDF?: (examen: ExamenCompleto) => void;
 }
 
 export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladasProps> = ({
@@ -42,6 +43,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
   onIrAHistorial,
   onActualizarPreguntaGlobal,
   onRegistrarResultadoPreguntas,
+  onExportarExamenPDF,
 }) => {
   // Filtros de selección de preguntas falladas
   const [modoFiltroPrincipal, setModoFiltroPrincipal] = useState<'ambos' | 'tematica' | 'ley'>('ambos');
@@ -437,6 +439,18 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
             <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
               {totalContestadas} de {testActivo.preguntas.length} contestadas
             </span>
+
+            {onExportarExamenPDF && (
+              <button
+                type="button"
+                onClick={() => onExportarExamenPDF(testActivo)}
+                className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 text-xs font-black shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Exportar test en formato PDF oficial + Plantilla de hoja de respuestas en blanco"
+              >
+                <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400"></i>
+                <span>Exportar PDF</span>
+              </button>
+            )}
 
             {!testFinalizado ? (
               <button

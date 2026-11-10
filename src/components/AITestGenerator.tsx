@@ -51,6 +51,7 @@ interface AITestGeneratorProps {
   onNavegarAlmacenDudas?: () => void;
   itemsAlmacenDudas?: ItemAlmacenDuda[];
   onGuardarEnAlmacenDudas?: (item: ItemAlmacenDuda) => void;
+  onExportarExamenPDF?: (examen: ExamenCompleto) => void;
 }
 
 export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
@@ -62,6 +63,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   onNavegarAlmacenDudas,
   itemsAlmacenDudas = [],
   onGuardarEnAlmacenDudas,
+  onExportarExamenPDF,
 }) => {
   // Configuration State
   const [tipoPrueba, setTipoPrueba] = useState<TipoPrueba>('unitario');
@@ -1060,7 +1062,13 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   const respuestaActual = respuestasUsuario[safeIdx];
 
   const exportarExamenPDF = () => {
-    window.print();
+    if (!examenActivo) return;
+    if (onExportarExamenPDF) {
+      onExportarExamenPDF({
+        ...examenActivo,
+        anotaciones,
+      });
+    }
   };
 
   return (
@@ -1890,12 +1898,13 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={exportarExamenPDF}
-                className="py-1.5 px-3 bg-white dark:bg-slate-700 hover:bg-slate-50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5"
-                title="Imprimir o guardar en PDF"
+                className="py-1.5 px-3 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                title="Exportar examen en formato PDF oficial + Plantilla de hoja de respuestas en blanco"
               >
-                <i className="fa-solid fa-print text-slate-500"></i>
-                <span>PDF</span>
+                <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400"></i>
+                <span>Exportar PDF</span>
               </button>
 
               <button
@@ -3387,11 +3396,13 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                     </button>
 
                     <button
+                      type="button"
                       onClick={exportarExamenPDF}
-                      className="py-2 px-4 bg-white dark:bg-slate-700 hover:bg-slate-50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      className="py-2 px-4 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                      title="Exportar cuadernillo de examen en formato PDF oficial + Plantilla de hoja de respuestas en blanco"
                     >
-                      <i className="fa-solid fa-file-pdf text-rose-500"></i>
-                      Exportar a PDF
+                      <i className="fa-solid fa-file-pdf text-rose-600"></i>
+                      <span>Exportar PDF + Plantilla</span>
                     </button>
 
                     <button

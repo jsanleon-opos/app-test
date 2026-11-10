@@ -45,6 +45,7 @@ interface OfficialJsonImporterProps {
   examenParaEditarRespuestas?: ExamenCompleto | null;
   onLimpiarExamenParaEditarRespuestas?: () => void;
   onGuardarRespuestasCorregidas?: (examenActualizado: ExamenCompleto) => void;
+  onExportarExamenPDF?: (examen: ExamenCompleto) => void;
 }
 
 function aplicarClavesTextoAPreguntas(
@@ -145,6 +146,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
   examenParaEditarRespuestas,
   onLimpiarExamenParaEditarRespuestas,
   onGuardarRespuestasCorregidas,
+  onExportarExamenPDF,
 }) => {
   const [jsonText, setJsonText] = useState('');
   const [eliminarReservasSiNoConstan, setEliminarReservasSiNoConstan] = useState(false);
@@ -1411,7 +1413,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                       </th>
 
                       {/* 6. Acciones (ancho suficiente garantizando separación total) */}
-                      <th className="py-2.5 px-3 text-right w-[250px] min-w-[250px]">
+                      <th className="py-2.5 px-3 text-right w-[282px] min-w-[282px]">
                         <span>Acciones</span>
                       </th>
                     </tr>
@@ -1662,7 +1664,19 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                                 <span className="w-7 h-7 inline-block shrink-0" aria-hidden="true"></span>
                               )}
 
-                              {/* Slot 2: Exportar JSON */}
+                              {/* Slot 2: Exportar PDF Oficial + Plantilla */}
+                              {onExportarExamenPDF && (
+                                <button
+                                  type="button"
+                                  onClick={() => onExportarExamenPDF(item)}
+                                  className="h-7 w-7 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-center transition-colors cursor-pointer border border-rose-200 dark:border-rose-800/80 shrink-0"
+                                  title="Exportar en PDF oficial + Plantilla de hoja de respuestas en blanco"
+                                >
+                                  <i className="fa-solid fa-file-pdf text-[10.5px]"></i>
+                                </button>
+                              )}
+
+                              {/* Slot 2B: Exportar JSON */}
                               <button
                                 type="button"
                                 onClick={() => exportarExamenAJSON(item)}
@@ -1877,13 +1891,24 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
                       >
                         <i className="fa-solid fa-pen-to-square"></i>
                       </button>
+                      {onExportarExamenPDF && (
+                        <button
+                          type="button"
+                          onClick={() => onExportarExamenPDF(ex)}
+                          className="h-7 px-2 rounded-lg text-rose-700 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-950/40 hover:bg-rose-100 border border-rose-200 dark:border-rose-800 flex items-center gap-1 text-[10px] font-bold transition-colors cursor-pointer"
+                          title="Exportar test o supuesto en PDF oficial + Plantilla de hoja de respuestas en blanco"
+                        >
+                          <i className="fa-solid fa-file-pdf text-[10px] text-rose-600"></i>
+                          <span>PDF</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => exportarExamenAJSON(ex)}
                         className="h-7 px-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 flex items-center gap-1 text-[10px] font-bold transition-colors cursor-pointer"
                         title="Exportar examen a archivo .json"
                       >
                         <i className="fa-solid fa-file-code text-[10px] text-indigo-500"></i>
-                        <span>Exportar</span>
+                        <span>JSON</span>
                       </button>
                       <button
                         onClick={() => onEliminarExamen(ex.id, ex.titulo)}
