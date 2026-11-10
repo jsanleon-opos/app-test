@@ -34,7 +34,7 @@ export const SeccionBibliotecaView: React.FC<SeccionBibliotecaViewProps> = ({
     <div className="space-y-4">
       {/* Selector superior de las 2 secciones de Biblioteca mediante 2 pestañas/botones */}
       <div className="w-full max-w-[1920px] mx-auto px-2 sm:px-5 pt-2">
-        <div className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <div className="bg-amber-50/80 dark:bg-slate-800 border-2 border-amber-300 dark:border-amber-800 rounded-2xl p-3 sm:p-4 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-linear-to-br from-amber-500 to-indigo-600 text-white flex items-center justify-center text-base shadow-xs shrink-0">
               <i className="fa-solid fa-book-bookmark"></i>
@@ -48,19 +48,19 @@ export const SeccionBibliotecaView: React.FC<SeccionBibliotecaViewProps> = ({
                   <button
                     type="button"
                     onClick={onAbrirCopiaSeguridad}
-                    className="px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    className="px-2 py-0.5 rounded-md bg-white hover:bg-indigo-50 dark:bg-indigo-950/70 dark:hover:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 text-[10px] font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
                     title="Abrir el gestor único de Copia de Seguridad e Importación Integral de toda la app"
                   >
                     <i className="fa-solid fa-shield-halved text-[9px] text-indigo-500"></i>
                     <span>Incluida en Copia de Seguridad Única de la App</span>
                   </button>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold">
+                  <span className="px-2 py-0.5 rounded-md bg-white dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 text-[10px] font-mono font-bold">
                     Incluida en Copia de Seguridad Única de la App
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-600 dark:text-slate-300">
                 Alterna entre tu <strong>Almacén de Dudas y Notas</strong> actual y la{' '}
                 <strong>Base de Datos de Documentos Locales y Enlaces Web</strong> clasificada por leyes, temas AGE/CAM y subtemas. Toda la Biblioteca se guarda y restaura unificadamente mediante la <strong>Copia de Seguridad</strong> general.
               </p>
@@ -68,7 +68,7 @@ export const SeccionBibliotecaView: React.FC<SeccionBibliotecaViewProps> = ({
           </div>
 
           {/* Dos botones / pestañas para acceder a una u otra sección */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-amber-100/80 dark:bg-slate-900 p-1.5 rounded-2xl border border-amber-300 dark:border-slate-700 shrink-0">
             <button
               type="button"
               onClick={() => setSubseccionActiva('dudas')}

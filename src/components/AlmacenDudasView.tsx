@@ -678,7 +678,7 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
   return (
     <div className="w-full max-w-[1920px] mx-auto px-2 sm:px-5 py-4 space-y-5">
       {/* CABECERA PRINCIPAL Y CUADROS SUPERIORES CON DOBLE CLIC PARA FILTRAR */}
-      <div className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-3xl p-4 sm:p-6 shadow-xs space-y-4">
+      <div className="bg-indigo-50/75 dark:bg-slate-850 border-2 border-indigo-300 dark:border-indigo-700/80 rounded-3xl p-4 sm:p-6 shadow-md space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
             <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center text-xl shadow-sm ring-4 ring-indigo-500/10 shrink-0">
@@ -877,7 +877,7 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
       </div>
 
       {/* PANEL DE FILTROS Y BÚSQUEDA */}
-      <div className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-3xl p-3.5 sm:p-4 shadow-xs space-y-3">
+      <div className="bg-sky-50/85 dark:bg-slate-850 border-2 border-sky-300 dark:border-sky-700/80 rounded-3xl p-3.5 sm:p-4 shadow-sm space-y-3">
         {/* Fila 1: Búsqueda y Orden */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1">

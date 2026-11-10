@@ -406,7 +406,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
     return (
       <div className="space-y-5">
         {/* Barra superior de control del Test de Falladas */}
-        <div className="bg-white dark:bg-slate-800 border-2 border-rose-200 dark:border-rose-900/70 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+        <div className="bg-rose-50/85 dark:bg-rose-950/35 border-2 border-rose-300 dark:border-rose-800 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center text-base shadow-xs shrink-0">
               <i className="fa-solid fa-rotate"></i>
@@ -556,7 +556,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
         )}
 
         {/* Barra de navegación numérica de preguntas */}
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 shadow-xs space-y-2.5">
+        <div className="bg-sky-50/85 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-800 rounded-2xl p-3.5 shadow-sm space-y-2.5">
           <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
             <span className="uppercase tracking-wider font-mono text-[10.5px]">
               Mapa de Preguntas del Test de Falladas ({testActivo.preguntas.length})
@@ -604,9 +604,9 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
 
         {/* Tarjeta de la Pregunta Actual */}
         {preguntaActual && (
-          <div className="bg-white dark:bg-slate-800 border-2 border-slate-200/90 dark:border-slate-700 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4">
             {/* Cabecera de la pregunta con botones 100% Inédita, Desmarcar y Dudosa juntos */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-mono">
                   PREGUNTA #{indicePreguntaActual + 1} (DE {testActivo.preguntas.length})
@@ -690,72 +690,81 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
               {preguntaActual.enunciado}
             </p>
 
-            {/* Opciones A, B, C, D */}
+            {/* Opciones A, B, C, D (altura invariable, colores suaves, visado verde ✓ y aspa roja ✗) */}
             <div className="space-y-2.5 pt-1">
               {preguntaActual.opciones.map((opc) => {
                 const seleccionada = respActual === opc.id;
                 let claseCaja =
-                  'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:border-indigo-400';
+                  'border-slate-300 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/70 hover:bg-indigo-50/40 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200';
+                let claseLetra =
+                  'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200';
+                let indicadorDerecha: React.ReactNode = null;
 
                 if (mostrarCorreccionInmediata) {
                   if (opc.esCorrecta) {
                     claseCaja =
-                      'border-2 border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100';
+                      'border-emerald-300/85 dark:border-emerald-800/70 bg-emerald-50/45 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100';
+                    claseLetra =
+                      'bg-emerald-100/85 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200';
+                    indicadorDerecha = (
+                      <span
+                        className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"
+                        title="Respuesta acertada / correcta"
+                      >
+                        <i className="fa-solid fa-check text-xs"></i>
+                      </span>
+                    );
                   } else if (seleccionada && !opc.esCorrecta) {
                     claseCaja =
-                      'border-2 border-rose-500 bg-rose-50/70 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100';
+                      'border-rose-300/85 dark:border-rose-800/70 bg-rose-50/45 dark:bg-rose-950/20 text-slate-900 dark:text-slate-100';
+                    claseLetra =
+                      'bg-rose-100/85 dark:bg-rose-900/50 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200';
+                    indicadorDerecha = (
+                      <span
+                        className="h-6 w-6 rounded-full bg-rose-100 dark:bg-rose-900/60 border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 flex items-center justify-center"
+                        title="Respuesta incorrecta"
+                      >
+                        <i className="fa-solid fa-xmark text-xs"></i>
+                      </span>
+                    );
+                  } else {
+                    claseCaja =
+                      'border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400';
                   }
                 } else if (seleccionada) {
                   claseCaja =
-                    'border-2 border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-100';
+                    'border-indigo-400 dark:border-indigo-600 bg-indigo-50/55 dark:bg-indigo-950/35 text-slate-900 dark:text-slate-100 ring-1 ring-indigo-400/50';
+                  claseLetra = 'bg-indigo-600 border border-indigo-600 text-white';
+                  indicadorDerecha = (
+                    <span
+                      className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"
+                      title="Opción seleccionada (clic de nuevo para desmarcar)"
+                    >
+                      <i className="fa-solid fa-check text-xs"></i>
+                    </span>
+                  );
                 }
 
                 return (
                   <div
                     key={opc.id}
                     onClick={() => handleSeleccionarOpcion(indicePreguntaActual, opc.id)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${claseCaja}`}
+                    className={`p-3.5 rounded-xl border transition-colors cursor-pointer flex items-start justify-between gap-3 ${claseCaja}`}
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 flex-1">
                       <span
-                        className={`w-7 h-7 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${
-                          mostrarCorreccionInmediata && opc.esCorrecta
-                            ? 'bg-emerald-600 text-white'
-                            : mostrarCorreccionInmediata && seleccionada && !opc.esCorrecta
-                            ? 'bg-rose-600 text-white'
-                            : seleccionada
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
-                        }`}
+                        className={`w-6 h-6 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${claseLetra}`}
                       >
                         {opc.id}
                       </span>
-                      <div className="space-y-1">
-                        <span className="text-xs sm:text-sm font-semibold leading-snug block">
-                          {mostrarCorreccionInmediata && !opc.esCorrecta && (
-                            <span className="text-rose-600 dark:text-rose-400 font-black mr-1.5">✗</span>
-                          )}
-                          {opc.texto}
-                        </span>
-                        {seleccionada && !testFinalizado && (
-                          <span className="text-[10.5px] font-bold text-indigo-600 dark:text-indigo-400 block">
-                            ✓ Opción marcada - Haz clic de nuevo para desmarcarla
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-xs sm:text-sm font-medium leading-snug block py-0.5">
+                        {opc.texto}
+                      </span>
                     </div>
 
-                    {mostrarCorreccionInmediata && (
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-black shrink-0 ${
-                          opc.esCorrecta
-                            ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
-                            : 'bg-rose-100 dark:bg-rose-900/70 text-rose-700 dark:text-rose-300'
-                        }`}
-                      >
-                        {opc.esCorrecta ? '✓ CORRECTA' : '✗ INCORRECTA'}
-                      </span>
-                    )}
+                    <span className="h-6 w-6 shrink-0 mt-0.5 flex items-center justify-center">
+                      {indicadorDerecha}
+                    </span>
                   </div>
                 );
               })}
@@ -1250,7 +1259,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
           {/* COLUMNA IZQUIERDA (8/12): Selección por Temática Concreta y por Ley Concreta */}
           <div className="xl:col-span-8 space-y-5">
             {/* Barra de modo de selección y filtros rápidos */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-xs space-y-3">
+            <div className="bg-slate-100/90 dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold">
                   <button
@@ -1326,7 +1335,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
 
             {/* BLOQUE 1: SELECCIÓN POR TEMÁTICA CONCRETA */}
             {(modoFiltroPrincipal === 'ambos' || modoFiltroPrincipal === 'tematica') && (
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+              <div className="bg-indigo-50/60 dark:bg-slate-800 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
@@ -1402,7 +1411,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
 
             {/* BLOQUE 2: SELECCIÓN POR LEY O NORMA CONCRETA */}
             {(modoFiltroPrincipal === 'ambos' || modoFiltroPrincipal === 'ley') && (
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+              <div className="bg-amber-50/60 dark:bg-slate-800 border-2 border-amber-300 dark:border-amber-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
@@ -1463,7 +1472,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
             )}
 
             {/* Previsualización de las preguntas falladas incluidas en la selección */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+            <div className="bg-white dark:bg-slate-900 border-2 border-rose-300 dark:border-rose-800 rounded-2xl p-4 sm:p-5 shadow-md space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 font-mono">
                   Vista Previa de Preguntas Falladas Seleccionadas ({preguntasFiltradasPool.length})

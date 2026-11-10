@@ -1540,7 +1540,7 @@ export default function App() {
   }, [historialPruebas, almacenDudas, versionFalladasApp]);
 
   return (
-    <div className={`min-h-screen flex flex-col ${isDarkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
+    <div className={`min-h-screen flex flex-col ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-200/80 text-slate-900'}`}>
       {/* Toast Notification Banner */}
       {toastNotificacion && (
         <div className="fixed top-4 right-4 z-50 max-w-md animate-fade-in shadow-xl">
@@ -1577,7 +1577,7 @@ export default function App() {
       )}
 
       {/* TOP HEADER BAR (ENSANCHADA PARA VISUALIZACIÓN COMPLETA DE TODOS LOS MENÚS) */}
-      <header className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 py-2.5 px-3 sm:px-6 z-30 shadow-xs transition-colors">
+      <header className="sticky top-0 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md border-b-2 border-indigo-200 dark:border-slate-700 py-2.5 px-3 sm:px-6 z-30 shadow-sm transition-colors">
         <div className="w-full max-w-[1920px] mx-auto flex flex-col gap-2.5">
           {/* Fila 1: Identidad de la Aplicación, Versión Interactiva v3.0 y Controles Globales */}
           <div className="w-full flex items-center justify-between gap-3 flex-wrap">
@@ -1594,10 +1594,10 @@ export default function App() {
                     type="button"
                     onClick={() => setMostrarModalVersion(true)}
                     className="text-[9px] sm:text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 font-mono inline-flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                    title="Ver novedades y últimos cambios de la Versión 3.2"
+                    title="Ver novedades y últimos cambios de la Versión 3.3"
                   >
                     <i className="fa-solid fa-sparkles text-[8px] text-amber-300"></i>
-                    <span>v3.2 · Novedades</span>
+                    <span>v3.3 · Novedades</span>
                   </button>
                   <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-mono flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -1626,7 +1626,7 @@ export default function App() {
                     className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
                   >
                     <i className="fa-solid fa-clock-rotate-left text-[8.5px]"></i>
-                    <span>Actualización v3.2 (RD 366/2007, IV Convenio AGE y RD 951/2005 + Títulos Multilínea + Editor en Banco + Biblioteca)</span>
+                    <span>Actualización v3.3 (Marcado compacto ✓/✗ sin desplazar Siguiente + Contraste de cuadros + Nuevas normas BOE)</span>
                   </button>
                 </p>
               </div>
@@ -1638,10 +1638,10 @@ export default function App() {
                 type="button"
                 onClick={() => setMostrarModalVersion(true)}
                 className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                title="Notas de la versión 3.2 y últimos cambios implementados"
+                title="Notas de la versión 3.3 y últimos cambios implementados"
               >
                 <i className="fa-solid fa-code-branch text-emerald-600 dark:text-emerald-400 text-[11px]"></i>
-                <span className="hidden sm:inline">Versión 3.2</span>
+                <span className="hidden sm:inline">Versión 3.3</span>
               </button>
 
               <button
@@ -1666,7 +1666,7 @@ export default function App() {
           </div>
 
           {/* Fila 2: Barra de Navegación Principal Ensanchada a Ancho Completo (7 secciones amplias y 100% visibles) */}
-          <nav className="w-full grid grid-cols-2 sm:grid-cols-4 lg:flex lg:items-center lg:justify-between gap-1.5 bg-slate-100/95 dark:bg-slate-800/95 p-1.5 rounded-2xl border border-slate-200/90 dark:border-slate-700/90 shadow-inner">
+          <nav className="w-full grid grid-cols-2 sm:grid-cols-4 lg:flex lg:items-center lg:justify-between gap-1.5 bg-indigo-100/75 dark:bg-slate-800 p-1.5 rounded-2xl border-2 border-indigo-200/90 dark:border-slate-700 shadow-inner">
             <button
               type="button"
               onClick={() => setTabActiva('generador')}
@@ -1886,7 +1886,7 @@ export default function App() {
           <div className="space-y-6">
             {/* Metric Summary con diseño elevado y resaltado */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-gradient-to-br from-indigo-50/60 via-white to-white dark:from-indigo-950/30 dark:via-slate-800 dark:to-slate-800 border border-indigo-100 dark:border-indigo-900/60 border-l-4 border-l-indigo-600 p-4 rounded-2xl shadow-xs flex items-center justify-between">
+              <div className="bg-indigo-50/90 dark:bg-indigo-950/35 border-2 border-indigo-300 dark:border-indigo-800 p-4 rounded-2xl shadow-sm flex items-center justify-between">
                 <div>
                   <span className="text-[9.5px] font-black uppercase text-indigo-700 dark:text-indigo-300 block tracking-wider font-mono">
                     Total de Pruebas Realizadas
@@ -1894,54 +1894,54 @@ export default function App() {
                   <span className="text-2xl font-black font-mono text-slate-900 dark:text-white mt-1 block">
                     {totalPruebasHistorial}
                   </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">
                     {historialPruebas.filter(e => e.tipo === 'unitario').length} Tests · {historialPruebas.filter(e => e.tipo === 'supuesto').length} Supuestos
                   </span>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-300 text-lg shadow-2xs">
+                <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg shadow-2xs">
                   <i className="fa-solid fa-clock-rotate-left"></i>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-blue-50/60 via-white to-white dark:from-blue-950/30 dark:via-slate-800 dark:to-slate-800 border border-blue-100 dark:border-blue-900/60 border-l-4 border-l-blue-600 p-4 rounded-2xl shadow-xs flex items-center justify-between">
+              <div className="bg-sky-50/90 dark:bg-sky-950/35 border-2 border-sky-300 dark:border-sky-800 p-4 rounded-2xl shadow-sm flex items-center justify-between">
                 <div>
-                  <span className="text-[9.5px] font-black uppercase text-blue-700 dark:text-blue-300 block tracking-wider font-mono">
+                  <span className="text-[9.5px] font-black uppercase text-sky-700 dark:text-sky-300 block tracking-wider font-mono">
                     Exámenes del Banco Cubiertos
                   </span>
-                  <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 mt-1 block">
-                    {examenesDiferentesEvaluados} <span className="text-sm font-normal text-slate-400">/ {bancoExamenes.length}</span>
+                  <span className="text-2xl font-black font-mono text-sky-700 dark:text-sky-300 mt-1 block">
+                    {examenesDiferentesEvaluados} <span className="text-sm font-normal text-slate-500">/ {bancoExamenes.length}</span>
                   </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">
                     {bancoExamenes.length > 0 ? `${Math.round((examenesDiferentesEvaluados / bancoExamenes.length) * 100)}% de exámenes únicos intentados` : 'Sin pruebas evaluadas'}
                   </span>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-300 text-lg shadow-2xs">
+                <div className="w-11 h-11 rounded-xl bg-sky-600 text-white flex items-center justify-center text-lg shadow-2xs">
                   <i className="fa-solid fa-circle-check"></i>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-emerald-50/60 via-white to-white dark:from-emerald-950/30 dark:via-slate-800 dark:to-slate-800 border border-emerald-100 dark:border-emerald-900/60 border-l-4 border-l-emerald-600 p-4 rounded-2xl shadow-xs flex items-center justify-between">
+              <div className="bg-emerald-50/90 dark:bg-emerald-950/35 border-2 border-emerald-300 dark:border-emerald-800 p-4 rounded-2xl shadow-sm flex items-center justify-between">
                 <div>
                   <span className="text-[9.5px] font-black uppercase text-emerald-700 dark:text-emerald-300 block tracking-wider font-mono">
                     Nota Media Transformada
                   </span>
-                  <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
-                    {notaMedia} <span className="text-xs font-normal text-slate-400">/ 100 PT</span>
+                  <span className="text-2xl font-black font-mono text-emerald-700 dark:text-emerald-300 mt-1 block">
+                    {notaMedia} <span className="text-xs font-normal text-slate-500">/ 100 PT</span>
                   </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">
                     {parseFloat(notaMedia) >= 50 ? 'Por encima del corte medio' : 'En proceso de preparación'}
                   </span>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-300 text-lg shadow-2xs">
+                <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-2xs">
                   <i className="fa-solid fa-award"></i>
                 </div>
               </div>
             </div>
 
             {/* List of saved exams */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+            <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-2xl p-4 sm:p-6 shadow-md space-y-4">
               {/* Header and Action Buttons */}
-              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 border-b border-slate-100 dark:border-slate-700 pb-3">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 border-b-2 border-slate-200 dark:border-slate-700 pb-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded font-mono">
@@ -2021,7 +2021,7 @@ export default function App() {
 
               {/* PANEL DE FILTROS Y BÚSQUEDA RESALTADO E INTUITIVO */}
               {historialPruebas.length > 0 && (
-                <div className="p-3.5 bg-gradient-to-r from-slate-50 via-slate-50 to-indigo-50/30 dark:from-slate-850 dark:via-slate-850 dark:to-indigo-950/20 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs space-y-3">
+                <div className="p-3.5 bg-indigo-50/80 dark:bg-slate-800 rounded-2xl border-2 border-indigo-200 dark:border-indigo-900/70 shadow-2xs space-y-3">
                   {/* Header de filtros */}
                   <div className="flex items-center justify-between pb-1 border-b border-slate-200/60 dark:border-slate-700/60">
                     <div className="flex items-center gap-2">
@@ -3417,10 +3417,10 @@ export default function App() {
         />
       )}
 
-      {/* MODAL DE VERSIÓN 3.2 Y ÚLTIMOS CAMBIOS */}
+      {/* MODAL DE VERSIÓN 3.3 Y ÚLTIMOS CAMBIOS */}
       {mostrarModalVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border-2 border-slate-300 dark:border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3.5">
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 rounded-2xl bg-linear-to-br from-indigo-600 to-emerald-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0">
@@ -3429,10 +3429,10 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      Notas de Versión v3.2.0
+                      Notas de Versión v3.3.0
                     </h3>
                     <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                      Nuevas Normas BOE + Multilínea + Banco y Biblioteca
+                      Marcado Fijo ✓/✗ + Sin Duplicidad BOE + Contraste de Cuadros
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -3450,15 +3450,27 @@ export default function App() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/35 border border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
                 <div className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
-                  <i className="fa-solid fa-scale-balanced text-emerald-600"></i>
-                  <span>Novedad v3.2 · Ampliación de la Base de Datos de Legislación y Ajustes en Vistas</span>
+                  <i className="fa-solid fa-check-double text-emerald-600"></i>
+                  <span>Novedad v3.3 · Marcado Limpio de Respuestas, Tamaño Fijo y Diferenciación de Cuadros</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  • <strong>Eliminada la información legal duplicada al responder</strong>: Suprimidos el bloque explicativo bajo cada opción y el recuadro inferior de «Fundamentación Oficial BOE» para no desplazar ni ocultar el botón <strong>Siguiente</strong> (toda la fundamentación sigue disponible en el botón <strong>Justificación</strong>).<br />
+                  • <strong>Tonos suaves + visado verde (✓) y aspa roja (✗)</strong>: Menor intensidad de verde y rojo en las opciones marcadas, con icono de visado en verde para acertadas y aspa en rojo para falladas.<br />
+                  • <strong>Altura invariable en la zona de preguntas</strong>: El tamaño del recuadro de preguntas no varía al responder, manteniendo <strong>Anterior / Justificación / Siguiente</strong> siempre en la misma posición.<br />
+                  • <strong>Mayor diferenciación cromática entre cuadros</strong>: Contraste reforzado entre el fondo general y los distintos paneles y bloques de toda la aplicación.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-teal-50/80 dark:bg-teal-950/35 border border-teal-300 dark:border-teal-800/80 space-y-1.5">
+                <div className="font-black text-teal-900 dark:text-teal-200 flex items-center gap-2">
+                  <i className="fa-solid fa-scale-balanced text-teal-600"></i>
+                  <span>Versión 3.2 · Ampliación de la Base de Datos de Legislación y Ajustes en Vistas</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
                   • Incorporados a la base de datos de legislación, generador, catalogadores, Biblioteca y banco de preguntas el <strong>Real Decreto 366/2007</strong> (condiciones de accesibilidad y no discriminación en las relaciones con la AGE), el <strong>IV Convenio Único para el Personal Laboral de la AGE</strong> y el <strong>Real Decreto 951/2005</strong> (marco general para la mejora de la calidad en la AGE).<br />
-                  • <strong>Nombres de test multilínea</strong>: Tanto en el <strong>Banco de Exámenes</strong> como en el <strong>Historial</strong> (vistas Listado y Tarjetas) se permiten varias líneas en el título del test para que se lea completo ajustándose al ancho disponible.<br />
-                  • <strong>Edición de respuestas centralizada en el Banco de Test</strong>: Eliminado el acceso directo desde la ventana Historial para mantener la edición de respuestas correctas exclusivamente en el <strong>Banco de Exámenes</strong> (conservando el recálculo automático de respuestas y nota en los tests ya realizados).
+                  • <strong>Nombres de test multilínea</strong> y <strong>edición de respuestas centralizada en el Banco de Test</strong> con recálculo automático en Historial.
                 </p>
               </div>
 
@@ -3498,7 +3510,7 @@ export default function App() {
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[11px] font-mono text-slate-400">
-                Versión 3.2.0 · Simulador C1 AGE & Comunidad de Madrid
+                Versión 3.3.0 · Simulador C1 AGE & Comunidad de Madrid
               </span>
               <button
                 type="button"

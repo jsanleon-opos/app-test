@@ -1112,7 +1112,7 @@ export const SeccionAnaliticaKPIs: React.FC<SeccionAnaliticaKPIsProps> = ({
   return (
     <div className="space-y-6">
       {/* CABECERA PRINCIPAL DE LA SECCIÓN ANALÍTICA */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 sm:p-6 shadow-xs relative overflow-hidden">
+      <div className="bg-indigo-50/75 dark:bg-slate-800 border-2 border-indigo-300 dark:border-indigo-700/80 rounded-2xl p-5 sm:p-6 shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
@@ -1255,7 +1255,7 @@ export const SeccionAnaliticaKPIs: React.FC<SeccionAnaliticaKPIsProps> = ({
       </div>
 
       {/* FILTROS GLOBALES DE ÁMBITO Y TIPO */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="bg-sky-50/85 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-700/80 rounded-2xl p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-black text-slate-400 uppercase font-mono">
             Filtrar datos por:
@@ -1320,7 +1320,7 @@ export const SeccionAnaliticaKPIs: React.FC<SeccionAnaliticaKPIsProps> = ({
       {/* ========================================================================= */}
       {/* 1º GRÁFICO: NÚMERO DE TESTS REALIZADOS (DÍA ACTUAL, SEMANAL, MENSUAL) */}
       {/* ========================================================================= */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 rounded-2xl p-5 shadow-md space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-700/80 pb-3">
           <div>
             <div className="flex items-center gap-2">
@@ -1588,7 +1588,7 @@ export const SeccionAnaliticaKPIs: React.FC<SeccionAnaliticaKPIsProps> = ({
       {/* ========================================================================= */}
       {/* 2º GRÁFICO: PUNTUACIONES DE LOS TESTS VS NOTAS DE CORTE DE CONVOCATORIA   */}
       {/* ========================================================================= */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-800 border-2 border-emerald-300 dark:border-emerald-800/80 rounded-2xl p-5 shadow-md space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-700/80 pb-3">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -1966,7 +1966,7 @@ export const SeccionAnaliticaKPIs: React.FC<SeccionAnaliticaKPIsProps> = ({
       {/* ========================================================================= */}
 
       {/* PANEL INTERACTIVO: PROPONER MI PROPIA NOTA DE CORTE (PERSONALIZADA) */}
-      <div className="bg-linear-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 dark:border-amber-700/60 rounded-2xl p-5 shadow-xs space-y-4">
+      <div className="bg-amber-50/90 dark:bg-amber-950/25 border-2 border-amber-400 dark:border-amber-700/80 rounded-2xl p-5 shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center text-lg shadow-sm shrink-0">
@@ -2117,7 +2117,7 @@ export const SeccionAnaliticaKPIs: React.FC<SeccionAnaliticaKPIsProps> = ({
       </div>
 
       {/* TABLA COMPARATIVA FRENTE A CORTES OFICIALES HISTÓRICOS */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 rounded-2xl p-5 shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/80 pb-3">
           <div>
             <h3 className="font-black text-slate-900 dark:text-white text-base uppercase tracking-wider flex items-center gap-2">

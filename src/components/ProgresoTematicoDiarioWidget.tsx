@@ -204,11 +204,11 @@ export const ProgresoTematicoDiarioWidget: React.FC<ProgresoTematicoDiarioWidget
   }, [fechaEspecifica, modoPeriodo, hoyStr, hayActividadHoy, ultimaFechaActiva]);
 
   return (
-    <section className="bg-white dark:bg-slate-800 border-2 border-indigo-200/80 dark:border-indigo-900/70 rounded-2xl shadow-sm overflow-hidden transition-all mb-5">
+    <section className="bg-emerald-50/60 dark:bg-slate-800 border-2 border-emerald-300 dark:border-emerald-800 rounded-2xl shadow-sm overflow-hidden transition-all mb-5">
       {/* Cabecera compacta del Widget */}
-      <div className="px-4 py-3 bg-linear-to-r from-indigo-50/90 via-white to-emerald-50/50 dark:from-indigo-950/50 dark:via-slate-800 dark:to-emerald-950/20 border-b border-slate-200/80 dark:border-slate-700/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="px-4 py-3 bg-linear-to-r from-emerald-100/85 via-teal-50/80 to-indigo-100/70 dark:from-emerald-950/60 dark:via-slate-800 dark:to-indigo-950/40 border-b-2 border-emerald-200 dark:border-slate-700 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex items-start sm:items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
             <i className="fa-solid fa-chart-column text-sm"></i>
           </div>
           <div>

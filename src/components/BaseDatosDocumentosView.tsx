@@ -962,7 +962,7 @@ export const BaseDatosDocumentosView: React.FC<BaseDatosDocumentosViewProps> = (
       )}
 
       {/* CABECERA DE LA BASE DE DATOS DE DOCUMENTOS Y ENLACES */}
-      <div className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-3xl p-4 sm:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-850 border-2 border-emerald-300 dark:border-emerald-800/80 rounded-3xl p-4 sm:p-6 shadow-md space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
             <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center text-xl shadow-sm ring-4 ring-emerald-500/10 shrink-0">
@@ -1174,7 +1174,7 @@ export const BaseDatosDocumentosView: React.FC<BaseDatosDocumentosViewProps> = (
         </div>
 
         {/* BARRA DE FILTROS MULTIDIMENSIONALES: POR LEY/RD, POR TEMA (AGE O CAM), POR SUBTEMA Y BÚSQUEDA */}
-        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+        <div className="p-4 rounded-2xl bg-emerald-50/80 dark:bg-slate-800/80 border-2 border-emerald-200 dark:border-emerald-800/70 space-y-3 shadow-xs">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 font-mono flex items-center gap-1.5">
               <i className="fa-solid fa-filter text-emerald-600"></i>
@@ -1376,7 +1376,7 @@ export const BaseDatosDocumentosView: React.FC<BaseDatosDocumentosViewProps> = (
 
             {vistaDocumentos === 'listado' ? (
               /* VISTA LISTADO ALINEADA ESTILO HISTORIAL Y BANCO DE EXÁMENES */
-              <div className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 shadow-xs overflow-hidden">
+              <div className="w-full rounded-2xl border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-850 shadow-sm overflow-hidden">
                 <table className="w-full text-left border-collapse text-xs table-fixed">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/90 text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-slate-400 select-none">

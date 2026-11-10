@@ -1701,7 +1701,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
     return (
       <div className="space-y-5">
         {/* BARRA SUPERIOR DE CONTROL DEL SIMULACRO OFICIAL UNIFICADO */}
-        <div className="bg-white dark:bg-slate-800 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
+        <div className="bg-indigo-50/90 dark:bg-indigo-950/40 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-linear-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center text-lg shadow-xs shrink-0">
               <i className="fa-solid fa-landmark-flag"></i>
@@ -1930,7 +1930,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
         )}
 
         {/* MAPA NAVEGADOR DE LAS DOS PARTES Y SUS PREGUNTAS DE RESERVA */}
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-xs space-y-3">
+        <div className="bg-sky-50/85 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-800 rounded-2xl p-4 shadow-sm space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <button
@@ -2112,8 +2112,8 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
 
         {/* TARJETA DE LA PREGUNTA ACTUAL */}
         {preguntaActual && (
-          <div className="bg-white dark:bg-slate-800 border-2 border-slate-200/90 dark:border-slate-700 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-mono">
                   {preguntaActual.esReserva
@@ -2217,109 +2217,109 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
               {preguntaActual.enunciado}
             </p>
 
-            {/* Opciones A, B, C, D */}
+            {/* Opciones A, B, C, D (altura invariable, colores atenuados, visado verde ✓ y aspa roja ✗) */}
             <div className="space-y-2.5 pt-1">
               {preguntaActual.opciones.map((opc) => {
                 const seleccionada = respActual === opc.id;
                 let claseCaja =
-                  'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:border-indigo-400';
+                  'border-slate-300 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/70 hover:bg-indigo-50/40 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200';
+                let claseLetra =
+                  'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200';
+                let indicadorDerecha: React.ReactNode = null;
 
                 if (mostrarCorreccion) {
                   if (opc.esCorrecta) {
                     claseCaja =
-                      'border-2 border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100';
+                      'border-emerald-300/85 dark:border-emerald-800/70 bg-emerald-50/45 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100';
+                    claseLetra =
+                      'bg-emerald-100/85 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200';
+                    indicadorDerecha = (
+                      <span
+                        className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"
+                        title="Respuesta acertada / correcta"
+                      >
+                        <i className="fa-solid fa-check text-xs"></i>
+                      </span>
+                    );
                   } else if (seleccionada && !opc.esCorrecta) {
                     claseCaja =
-                      'border-2 border-rose-500 bg-rose-50/70 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100';
+                      'border-rose-300/85 dark:border-rose-800/70 bg-rose-50/45 dark:bg-rose-950/20 text-slate-900 dark:text-slate-100';
+                    claseLetra =
+                      'bg-rose-100/85 dark:bg-rose-900/50 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200';
+                    indicadorDerecha = (
+                      <span
+                        className="h-6 w-6 rounded-full bg-rose-100 dark:bg-rose-900/60 border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 flex items-center justify-center"
+                        title="Respuesta incorrecta"
+                      >
+                        <i className="fa-solid fa-xmark text-xs"></i>
+                      </span>
+                    );
+                  } else {
+                    claseCaja =
+                      'border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400';
                   }
                 } else if (seleccionada) {
                   claseCaja =
-                    'border-2 border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-100';
+                    'border-indigo-400 dark:border-indigo-600 bg-indigo-50/55 dark:bg-indigo-950/35 text-slate-900 dark:text-slate-100 ring-1 ring-indigo-400/50';
+                  claseLetra = 'bg-indigo-600 border border-indigo-600 text-white';
+                  indicadorDerecha = (
+                    <span
+                      className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"
+                      title="Opción seleccionada"
+                    >
+                      <i className="fa-solid fa-check text-xs"></i>
+                    </span>
+                  );
                 }
 
                 return (
                   <div
                     key={opc.id}
                     onClick={() => handleSeleccionarOpcion(indicePreguntaActual, opc.id)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${claseCaja}`}
+                    className={`p-3.5 rounded-xl border transition-colors cursor-pointer flex items-start justify-between gap-3 ${claseCaja}`}
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 flex-1">
                       <span
-                        className={`w-7 h-7 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${
-                          mostrarCorreccion && opc.esCorrecta
-                            ? 'bg-emerald-600 text-white'
-                            : mostrarCorreccion && seleccionada && !opc.esCorrecta
-                            ? 'bg-rose-600 text-white'
-                            : seleccionada
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
-                        }`}
+                        className={`w-6 h-6 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${claseLetra}`}
                       >
                         {opc.id}
                       </span>
-                      <div className="space-y-1">
-                        <span className="text-xs sm:text-sm font-semibold leading-snug block">
-                          {opc.texto}
-                        </span>
-                        {mostrarCorreccion && opc.explicacion && !opc.esCorrecta && (
-                          <span className="text-[11.5px] text-rose-700 dark:text-rose-300 font-medium block">
-                            ✗ Distractor: {opc.explicacion}
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-xs sm:text-sm font-medium leading-snug block py-0.5">
+                        {opc.texto}
+                      </span>
                     </div>
+                    <span className="h-6 w-6 shrink-0 mt-0.5 flex items-center justify-center">
+                      {indicadorDerecha}
+                    </span>
                   </div>
                 );
               })}
             </div>
 
-            {/* Fundamentación rápida y botón de Ventana Justificación BOE */}
-            {mostrarCorreccion && (
-              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/80 dark:bg-slate-900/50 p-3.5 rounded-xl">
-                <div className="space-y-1 text-xs">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono font-black uppercase text-indigo-600 dark:text-indigo-400">
-                      Clave Oficial: Opción {opcionCorrectaActual?.id}
-                    </span>
-                    <span className="text-slate-400">·</span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">
-                      {obtenerNormaEfectivaDePregunta(preguntaActual, simulacroActivo)} (
-                      {preguntaActual.justificacionLegal?.articulo || 'Precepto aplicable'})
-                    </span>
-                  </div>
-                  <p className="text-slate-600 dark:text-slate-300 line-clamp-2">
-                    {renderizarTextoConEnlacesBOE(
-                      preguntaActual.justificacionLegal?.fundamento ||
-                        opcionCorrectaActual?.explicacion ||
-                        'Respuesta verificada conforme al bloque normativo oficial.'
-                    )}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setPreguntaModalJustificacion(indicePreguntaActual)}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shrink-0 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <i className="fa-solid fa-scale-balanced"></i>
-                  <span>Justificación Oficial BOE</span>
-                </button>
-              </div>
-            )}
-
-            {/* Navegación Anterior / Siguiente */}
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3">
+            {/* Navegación Anterior / Siguiente + Acceso a Ventana Justificación sin variar altura */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
               <button
                 type="button"
                 disabled={indicePreguntaActual === 0}
                 onClick={() => setIndicePreguntaActual((prev) => Math.max(0, prev - 1))}
-                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 border border-slate-300 dark:border-slate-600 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex items-center gap-1.5"
               >
                 <i className="fa-solid fa-arrow-left text-[10px]"></i>
                 <span>Anterior</span>
               </button>
 
               <div className="flex items-center gap-2">
+                {mostrarCorreccion && (
+                  <button
+                    type="button"
+                    onClick={() => setPreguntaModalJustificacion(indicePreguntaActual)}
+                    className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Abrir Ventana Justificación Oficial BOE"
+                  >
+                    <i className="fa-solid fa-scale-balanced text-amber-600 dark:text-amber-400"></i>
+                    <span>Justificación</span>
+                  </button>
+                )}
                 {!esPreguntaSupuesto && primerIndiceSupuesto > 0 && (
                   <button
                     type="button"
@@ -2710,8 +2710,8 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
           {/* ========================================================================== */}
           {/* PASO 1: CONFIGURAR LA 1.ª PARTE (TODAS LAS CATEGORÍAS + ÁMBITO O ALEATORIO POR LEYES/TEMAS) */}
           {/* ========================================================================== */}
-          <div className="bg-white dark:bg-slate-800 border-2 border-slate-200/90 dark:border-slate-700 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="border-b border-slate-100 dark:border-slate-700 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="bg-indigo-50/55 dark:bg-slate-800 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-5 shadow-sm space-y-4">
+            <div className="border-b-2 border-indigo-200/80 dark:border-slate-700 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2 py-0.5 rounded bg-indigo-600 text-white font-mono text-[10px] font-black uppercase">
@@ -3218,8 +3218,8 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
           {/* ========================================================================== */}
           {/* PASO 2: SUPUESTO PRÁCTICO DE 20 PREGUNTAS (CON FILTROS POR CATEGORÍA Y ÁMBITO) */}
           {/* ========================================================================== */}
-          <div className="bg-white dark:bg-slate-800 border-2 border-slate-200/90 dark:border-slate-700 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-700 pb-3">
+          <div className="bg-amber-50/60 dark:bg-slate-800 border-2 border-amber-300 dark:border-amber-800 rounded-2xl p-5 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-amber-200/80 dark:border-slate-700 pb-3">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-mono text-[10px] font-black uppercase">

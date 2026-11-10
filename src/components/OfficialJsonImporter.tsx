@@ -967,10 +967,10 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
           }}
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all flex flex-col items-center justify-between gap-3 cursor-pointer shadow-xs ${
+          className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all flex flex-col items-center justify-between gap-3 cursor-pointer shadow-sm ${
             dragActive
-              ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/40 scale-[1.01]'
-              : 'border-indigo-300/80 dark:border-indigo-800/80 bg-linear-to-b from-indigo-50/40 via-white to-white dark:from-slate-800 dark:via-slate-800 dark:to-slate-850 hover:border-indigo-400 dark:hover:border-indigo-600'
+              ? 'border-indigo-600 bg-indigo-100/90 dark:bg-indigo-950/60 scale-[1.01]'
+              : 'border-indigo-400 dark:border-indigo-700 bg-indigo-50/85 dark:bg-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500'
           }`}
           onClick={() => document.getElementById('json-file-input')?.click()}
         >
@@ -1018,7 +1018,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
         </div>
 
         {/* Box 2: Paste JSON Text Directly */}
-        <div className="bg-linear-to-b from-slate-50/70 via-white to-white dark:from-slate-800 dark:via-slate-800 dark:to-slate-850 border border-slate-300 dark:border-slate-700 rounded-2xl p-5 shadow-xs flex flex-col justify-between gap-3">
+        <div className="bg-sky-50/80 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between gap-3">
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="px-2.5 py-0.5 rounded-full bg-slate-800 dark:bg-slate-700 text-white text-[9.5px] font-black uppercase tracking-wider font-mono shadow-2xs">
@@ -1095,9 +1095,9 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
       </div>
 
       {/* BANCO DE EXÁMENES OFICIALES: FILTROS, VISTAS Y ETIQUETADO */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-2xl p-4 sm:p-6 shadow-md space-y-4">
         {/* Cabecera del Banco con Toggle Listado / Tarjetas */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 dark:border-slate-700 pb-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b-2 border-slate-200 dark:border-slate-700 pb-3">
           <div>
             <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
               <i className="fa-solid fa-layer-group text-indigo-600"></i>
@@ -1140,7 +1140,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
         </div>
 
         {/* Panel de Filtros: Búsqueda, Ámbito y Categorías */}
-        <div className="p-3.5 bg-gradient-to-r from-slate-50 via-slate-50 to-indigo-50/30 dark:from-slate-850 dark:via-slate-850 dark:to-indigo-950/20 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs space-y-3">
+        <div className="p-3.5 bg-indigo-50/75 dark:bg-slate-800 rounded-2xl border-2 border-indigo-200 dark:border-indigo-900/70 shadow-2xs space-y-3">
           {/* Header de filtros */}
           <div className="flex items-center justify-between pb-1 border-b border-slate-200/60 dark:border-slate-700/60">
             <div className="flex items-center gap-2">
