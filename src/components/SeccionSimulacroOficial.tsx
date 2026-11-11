@@ -1178,6 +1178,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
     const clavesUsadas = new Set<string>();
     const leyesAplicadasSet = new Set<string>();
     let etiquetaParte1 = '70 Cuestionario';
+    let nombreTestParte1Detalle = '';
     let ambitoGeneral: ConvocatoriaAmbito = 'AGE';
 
     // 1. Obtener preguntas ordinarias y de reserva (hasta 5) de la 1.ª Parte
@@ -1226,8 +1227,10 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
         etiquetaParte1 = `${parte1Ordinarias.length}${
           parte1Reservas.length > 0 ? `+${parte1Reservas.length}R` : ''
         } ${labelCat} ${testElegido.ambito}`;
+        nombreTestParte1Detalle = `1.ª Parte: ${testElegido.titulo}`;
       } else {
         parte1Ordinarias = preguntasPoolAGE.slice(0, 70);
+        nombreTestParte1Detalle = `1.ª Parte: Cuestionario General AGE (${parte1Ordinarias.length} preg.)`;
       }
 
       parte1Ordinarias.forEach((p) => clavesUsadas.add(normalizarClavePregunta(p.enunciado)));
@@ -1306,6 +1309,10 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
       etiquetaParte1 = `${parte1Ordinarias.length}${
         parte1Reservas.length > 0 ? `+${parte1Reservas.length}R` : ''
       } Por Leyes/Temas`;
+      const listaLeyesBreve = Array.from(leyesAplicadasSet).slice(0, 3).join(', ');
+      nombreTestParte1Detalle = `1.ª Parte: Cuestionario por Leyes/Temas (${parte1Ordinarias.length}${
+        parte1Reservas.length > 0 ? `+${parte1Reservas.length} res.` : ''
+      } preg.${listaLeyesBreve ? ` · ${listaLeyesBreve}${leyesAplicadasSet.size > 3 ? '...' : ''}` : ''})`;
     }
 
     // 2. Seleccionar el Supuesto Práctico de 20 preguntas (+ hasta 5 de reserva si las tiene disponibles)
@@ -1421,6 +1428,14 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
       tituloSimulacro.trim() ||
       `Simulacro Oficial Unificado (${etiquetaParte1} + ${etiquetaSupuesto} · ${duracionSeguraMin} min)`;
 
+    const listaTestsIncluidos: string[] = [];
+    if (nombreTestParte1Detalle) {
+      listaTestsIncluidos.push(nombreTestParte1Detalle);
+    }
+    if (supuestoElegido) {
+      listaTestsIncluidos.push(`Supuesto I: ${supuestoElegido.titulo}`);
+    }
+
     const nuevoSimulacro: ExamenCompleto = {
       id: `SIMULACRO-OFICIAL-${Date.now()}`,
       titulo: tituloFinal,
@@ -1444,6 +1459,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
         'funcion_publica_personal',
       ],
       leyesBOEAplicadas: Array.from(leyesAplicadasSet),
+      testsIncluidos: listaTestsIncluidos,
       preguntas: extendidas,
     };
 

@@ -3367,6 +3367,7 @@ export interface CopiaSeguridadIntegral {
   controlPreguntasSuperadas?: Record<string, any>;
   examenesEliminadosIds?: string[];
   historialPreguntasRecientes?: string[];
+  testsDescargadosPDF?: any[];
   configuracion: {
     darkMode?: boolean;
     autoAvanceAlFinal?: boolean;
@@ -3510,6 +3511,15 @@ export async function descargarCopiaSeguridadCompleta(
     }
   } catch (_) {}
 
+  let testsDescargadosPDF: any[] = [];
+  try {
+    const rawDescargados = localStorage.getItem('c1_tests_descargados_pdf');
+    if (rawDescargados) {
+      const parsedDesc = JSON.parse(rawDescargados);
+      if (Array.isArray(parsedDesc)) testsDescargadosPDF = parsedDesc;
+    }
+  } catch (_) {}
+
   const darkMode = localStorage.getItem('c1_dark_mode') === 'true';
   const autoAvanceRaw = localStorage.getItem('c1_auto_avance_al_final');
   const autoAvanceAlFinal = autoAvanceRaw !== null ? autoAvanceRaw === 'true' : undefined;
@@ -3546,6 +3556,7 @@ export async function descargarCopiaSeguridadCompleta(
     controlPreguntasSuperadas,
     examenesEliminadosIds,
     historialPreguntasRecientes,
+    testsDescargadosPDF,
     configuracion: {
       darkMode,
       autoAvanceAlFinal,
@@ -3626,6 +3637,18 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
 
   if (Array.isArray(parsed.historialPreguntasRecientes)) {
     guardarEnLocalStorageSeguro('c1_historial_preguntas_recientes', parsed.historialPreguntasRecientes);
+  }
+
+  if (Array.isArray(parsed.testsDescargadosPDF)) {
+    try {
+      const actualRaw = localStorage.getItem('c1_tests_descargados_pdf');
+      const actualArr = actualRaw ? JSON.parse(actualRaw) : [];
+      const mapaIds = new Map<string, any>();
+      [...parsed.testsDescargadosPDF, ...(Array.isArray(actualArr) ? actualArr : [])].forEach((it) => {
+        if (it && it.id) mapaIds.set(it.id, it);
+      });
+      guardarEnLocalStorageSeguro('c1_tests_descargados_pdf', Array.from(mapaIds.values()).slice(0, 40));
+    } catch (_) {}
   }
 
   let darkModeRestaurado: boolean | undefined = undefined;

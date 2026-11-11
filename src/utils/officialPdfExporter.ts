@@ -31,6 +31,129 @@ export interface ResultadoGeneracionPDFOficial {
   codigoPieAplicado: string;
   totalOrdinarias: number;
   totalReservas: number;
+  testsIncluidos: string[];
+}
+
+export interface RegistroTestDescargadoPDF {
+  id: string;
+  examenId: string;
+  testBaseId?: string;
+  tituloPrincipal: string;
+  testsIncluidos: string[];
+  modelo: 'A' | 'B';
+  tipoArchivo: 'examen_y_plantilla' | 'todo_en_1_pdf' | 'solo_examen' | 'solo_plantilla';
+  fechaDescargaISO: string;
+}
+
+const STORAGE_KEY_TESTS_DESCARGADOS_PDF = 'c1_tests_descargados_pdf';
+
+export function leerTestsDescargadosDeLocalStorage(): RegistroTestDescargadoPDF[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_TESTS_DESCARGADOS_PDF);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function registrarDescargaTestEnLocalStorage(
+  nuevo: Omit<RegistroTestDescargadoPDF, 'id' | 'fechaDescargaISO'>
+): RegistroTestDescargadoPDF[] {
+  const actuales = leerTestsDescargadosDeLocalStorage();
+  const ahora = new Date().toISOString();
+  const firmaTests = nuevo.testsIncluidos.join(' | ').trim().toLowerCase();
+
+  // Si el mismo conjunto de tests ya estaba registrado, actualizar su fecha/formato y subirlo al primer lugar
+  const sinDuplicadoExacto = actuales.filter((item) => {
+    const firmaItem = item.testsIncluidos.join(' | ').trim().toLowerCase();
+    return !(item.examenId === nuevo.examenId && firmaItem === firmaTests);
+  });
+
+  const registroCompleto: RegistroTestDescargadoPDF = {
+    ...nuevo,
+    id: `dl-pdf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    fechaDescargaISO: ahora,
+  };
+
+  const actualizados = [registroCompleto, ...sinDuplicadoExacto].slice(0, 30);
+  try {
+    localStorage.setItem(STORAGE_KEY_TESTS_DESCARGADOS_PDF, JSON.stringify(actualizados));
+  } catch (_) {}
+  return actualizados;
+}
+
+export function eliminarRegistroTestDescargadoDeLocalStorage(
+  registroId: string
+): RegistroTestDescargadoPDF[] {
+  const filtrados = leerTestsDescargadosDeLocalStorage().filter((r) => r.id !== registroId);
+  try {
+    localStorage.setItem(STORAGE_KEY_TESTS_DESCARGADOS_PDF, JSON.stringify(filtrados));
+  } catch (_) {}
+  return filtrados;
+}
+
+export function limpiarTestsDescargadosDeLocalStorage(): RegistroTestDescargadoPDF[] {
+  try {
+    localStorage.removeItem(STORAGE_KEY_TESTS_DESCARGADOS_PDF);
+  } catch (_) {}
+  return [];
+}
+
+/**
+ * Devuelve la lista exacta y legible de los tests y/o supuestos incluidos en una descarga PDF.
+ */
+export function obtenerResumenTestsIncluidosEnDescarga(
+  examen: ExamenCompleto,
+  opciones?: OpcionesExportacionPDFOficial
+): string[] {
+  const resultado: string[] = [];
+
+  if (Array.isArray(examen.testsIncluidos) && examen.testsIncluidos.length > 0) {
+    examen.testsIncluidos.forEach((t) => {
+      const limpio = String(t || '').trim();
+      if (limpio) resultado.push(limpio);
+    });
+  } else if (examen.titulo?.trim()) {
+    const esSup =
+      examen.tipo === 'supuesto' ||
+      examen.categoria?.startsWith('supuesto') ||
+      Boolean(examen.contextoCaso && examen.contextoCaso.trim().length > 20);
+    const totalOrd = Array.isArray(examen.preguntas)
+      ? examen.preguntas.filter((p) => !p.esReserva).length
+      : 0;
+    const totalRes = Array.isArray(examen.preguntas)
+      ? examen.preguntas.filter((p) => Boolean(p.esReserva)).length
+      : 0;
+    const sufijoPreg =
+      totalOrd > 0 ? ` (${totalOrd}${totalRes > 0 ? `+${totalRes} res.` : ''} preg.)` : '';
+    resultado.push(
+      `${esSup ? 'Supuesto práctico' : 'Test'}: ${examen.titulo.trim()}${
+        examen.titulo.includes('preg') ? '' : sufijoPreg
+      }`
+    );
+  }
+
+  const extras = [opciones?.supuestoAdicional1, opciones?.supuestoAdicional2].filter(
+    (x): x is ExamenCompleto => Boolean(x && x.preguntas && x.preguntas.length > 0)
+  );
+
+  // Contar cuántos supuestos había ya en el examen principal
+  const yaTieneSupuestoBase =
+    examen.tipo === 'supuesto' ||
+    examen.categoria?.startsWith('supuesto') ||
+    Boolean(examen.contextoCaso && examen.contextoCaso.trim().length > 20) ||
+    (Array.isArray(examen.preguntas) &&
+      examen.preguntas.some((p) => Boolean((p as any).bloqueSimulacro === 'parte2_ordinaria')));
+
+  extras.forEach((supExtra, idx) => {
+    const numSup = (yaTieneSupuestoBase ? 1 : 0) + idx + 1;
+    const romano = numSup === 1 ? 'I' : numSup === 2 ? 'II' : String(numSup);
+    resultado.push(`Supuesto ${romano}: ${supExtra.titulo.trim()}`);
+  });
+
+  return resultado;
 }
 
 /**
@@ -277,6 +400,7 @@ function renderizarCuadernilloEnDocumento(
   const incluirSoluciones = opciones?.incluirPlantillaSoluciones ?? true;
   const subtituloCuerpo =
     opciones?.subtituloCuerpo?.trim() || deducirSubtituloCuerpoPorDefecto(examen);
+  const testsIncluidos = obtenerResumenTestsIncluidosEnDescarga(examen, opciones);
 
   const secciones = construirSeccionesCuadernillo(examen, opciones);
 
@@ -311,6 +435,49 @@ function renderizarCuadernilloEnDocumento(
   const nuevaPaginaCuadernillo = () => {
     doc.addPage('a4', 'portrait');
     cursorY = MARGEN_SUP;
+  };
+
+  const dibujarEncabezadoTestsDescargadosPortada = () => {
+    if (testsIncluidos.length === 0) return;
+
+    const etiquetaCab =
+      testsIncluidos.length > 1
+        ? 'TESTS Y SUPUESTOS DESCARGADOS PARA REALIZAR:'
+        : 'TEST / PRUEBA DESCARGADA PARA REALIZAR:';
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.3);
+    const lineasItems: string[] = [];
+    testsIncluidos.forEach((item) => {
+      const limpio = normalizarTextoParaPDFOficial(item);
+      const prefijo = testsIncluidos.length > 1 ? '- ' : '';
+      const envueltas: string[] = doc.splitTextToSize(`${prefijo}${limpio}`, ANCHO_UTIL - 6);
+      lineasItems.push(...envueltas);
+    });
+
+    const altoLineaItem = 3.55;
+    const altoCaja = 5.4 + lineasItems.length * altoLineaItem + 1.8;
+
+    doc.setDrawColor(60, 60, 60);
+    doc.setFillColor(248, 250, 252);
+    doc.setLineWidth(0.24);
+    doc.rect(MARGEN_IZQ, cursorY, ANCHO_UTIL, altoCaja, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.6);
+    doc.setTextColor(30, 41, 59);
+    doc.text(etiquetaCab, MARGEN_IZQ + 3, cursorY + 3.8);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.4);
+    doc.setTextColor(0, 0, 0);
+    let yTexto = cursorY + 7.4;
+    lineasItems.forEach((lin) => {
+      doc.text(lin, MARGEN_IZQ + 3, yTexto);
+      yTexto += altoLineaItem;
+    });
+
+    cursorY += altoCaja + 3.2;
   };
 
   const dibujarRecuadroSeccion = (titulo: string) => {
@@ -518,6 +685,9 @@ function renderizarCuadernilloEnDocumento(
   let totalOrdinarias = 0;
   let totalReservas = 0;
 
+  // Encabezado inicial en la portada del cuadernillo indicando qué test(s) se han descargado para realizar
+  dibujarEncabezadoTestsDescargadosPortada();
+
   // Renderizado secuencial de todas las secciones del cuadernillo
   secciones.forEach((sec, secIdx) => {
     if (secIdx > 0 && sec.iniciarEnNuevaPagina) {
@@ -553,10 +723,25 @@ function renderizarCuadernilloEnDocumento(
   });
 
   const paginasCuadernillo = doc.getNumberOfPages();
+  const textoCabeceraCorrida = normalizarTextoParaPDFOficial(
+    `Prueba para realizar: ${testsIncluidos.join('  |  ')}`
+  );
 
-  // Estampar el pie de página oficial ("2026 - ADVO-L - MODELO A" centrado y "Página X de Y" a la derecha)
+  // Estampar encabezado corrido en páginas 2..N y pie de página oficial en todas las páginas
   for (let p = 1; p <= paginasCuadernillo; p++) {
     doc.setPage(p);
+
+    if (p > 1 && testsIncluidos.length > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.2);
+      doc.setTextColor(80, 80, 80);
+      const recorteCab = doc.splitTextToSize(textoCabeceraCorrida, ANCHO_UTIL)[0] || '';
+      doc.text(recorteCab, MARGEN_IZQ, 9.2);
+      doc.setDrawColor(190, 190, 190);
+      doc.setLineWidth(0.18);
+      doc.line(MARGEN_IZQ, 10.4, 210 - MARGEN_DER, 10.4);
+    }
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
@@ -574,7 +759,8 @@ function renderizarCuadernilloEnDocumento(
       doc,
       secciones,
       modelo,
-      subtituloCuerpo
+      subtituloCuerpo,
+      testsIncluidos
     );
   }
 
@@ -589,15 +775,24 @@ function renderizarPaginaPlantillaDefinitivaSoluciones(
   doc: jsPDF,
   secciones: BloqueSeccionCuadernillo[],
   modelo: 'A' | 'B',
-  subtituloCuerpo: string
+  subtituloCuerpo: string,
+  testsIncluidos: string[] = []
 ) {
   doc.addPage('a4', 'portrait');
 
+  const textoTestsClave =
+    testsIncluidos.length > 0
+      ? normalizarTextoParaPDFOficial(`Test / Pruebas: ${testsIncluidos.join(' | ')}`)
+      : '';
+
   const dibujarCabeceraSoluciones = () => {
+    const tieneLineaTests = Boolean(textoTestsClave);
+    const altoCab = tieneLineaTests ? 15.6 : 11.8;
+
     doc.setDrawColor(0, 0, 0);
     doc.setFillColor(255, 255, 255);
     doc.setLineWidth(0.3);
-    doc.rect(15, 13.5, 180, 11.8, 'FD');
+    doc.rect(15, 13.5, 180, altoCab, 'FD');
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
@@ -608,10 +803,17 @@ function renderizarPaginaPlantillaDefinitivaSoluciones(
       18.3,
       { align: 'center' }
     );
-    doc.setFontSize(9.5);
-    doc.text(normalizarTextoParaPDFOficial(subtituloCuerpo), 105, 23.2, {
+    doc.setFontSize(9.2);
+    doc.text(normalizarTextoParaPDFOficial(subtituloCuerpo), 105, 22.9, {
       align: 'center',
     });
+
+    if (tieneLineaTests) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.8);
+      const lineaRecortada = doc.splitTextToSize(textoTestsClave, 174)[0] || '';
+      doc.text(lineaRecortada, 105, 27.1, { align: 'center' });
+    }
   };
 
   dibujarCabeceraSoluciones();
@@ -623,7 +825,7 @@ function renderizarPaginaPlantillaDefinitivaSoluciones(
     return correcta.id.toLowerCase();
   };
 
-  const Y_INICIO_COL = 31.5;
+  const Y_INICIO_COL = textoTestsClave ? 34.5 : 31.5;
   const Y_MAX_COL = 282;
   const ALTO_FILA = 3.52;
 
@@ -935,7 +1137,8 @@ function dibujarColumnaRespuestasOMR(
  */
 export function dibujarPlantillaHojaRespuestasEnPagina(
   doc: jsPDF,
-  modelo: 'A' | 'B' = 'A'
+  modelo: 'A' | 'B' = 'A',
+  testsIncluidos: string[] = []
 ) {
   // Fondo general limpio de la hoja
   doc.setFillColor(255, 255, 255);
@@ -952,8 +1155,18 @@ export function dibujarPlantillaHojaRespuestasEnPagina(
 
   dibujarEscudoMinisterioVectorial(doc, 24.5, 11.5);
 
-  // 2. Bloque superior de Datos Personales EN BLANCO (1º Apellido, 2º Apellido, Nombre, NIF/Pasaporte, Firma)
+  // Encabezado institucional superior con el nombre del test / supuesto descargado para realizar
   const xDatos = 44.5;
+  if (testsIncluidos.length > 0) {
+    const lineaRef = normalizarTextoParaPDFOficial(
+      `PRUEBA DESCARGADA PARA REALIZAR: ${testsIncluidos.join('  |  ')}`
+    );
+    aplicarTextoVerdeOMR(doc, 5.4, true);
+    const lineaAjustada = doc.splitTextToSize(lineaRef, 158)[0] || '';
+    doc.text(lineaAjustada, xDatos, 4.1);
+  }
+
+  // 2. Bloque superior de Datos Personales EN BLANCO (1º Apellido, 2º Apellido, Nombre, NIF/Pasaporte, Firma)
   dibujarCasillasCaracteresEnBlanco(doc, '1º APELLIDO', xDatos, 8.2, 18);
   dibujarCasillasCaracteresEnBlanco(doc, '2º APELLIDO', xDatos, 19.2, 18);
   dibujarCasillasCaracteresEnBlanco(doc, 'NOMBRE', xDatos, 30.2, 18);
@@ -1139,6 +1352,7 @@ export function generarPaquetePDFOficial(
   const slug = generarSlugArchivo(examen.titulo);
   const codigoPieAplicado =
     opciones?.codigoPiePagina?.trim() || deducirCodigoPiePorDefecto(examen, modelo);
+  const testsIncluidos = obtenerResumenTestsIncluidosEnDescarga(examen, opciones);
 
   // 1. Generar Cuadernillo de Examen Oficial
   const docCuadernillo = new jsPDF({
@@ -1159,7 +1373,7 @@ export function generarPaquetePDFOficial(
     format: 'a4',
     compress: true,
   });
-  dibujarPlantillaHojaRespuestasEnPagina(docPlantilla, modelo);
+  dibujarPlantillaHojaRespuestasEnPagina(docPlantilla, modelo, testsIncluidos);
   const plantillaOMRBlob = docPlantilla.output('blob');
   const plantillaOMRNombreArchivo = `Plantilla_Hoja_Respuestas_Modelo_${modelo}_${slug}.pdf`;
 
@@ -1172,7 +1386,7 @@ export function generarPaquetePDFOficial(
   });
   renderizarCuadernilloEnDocumento(docCombinado, examen, opciones);
   docCombinado.addPage('a4', 'portrait');
-  dibujarPlantillaHojaRespuestasEnPagina(docCombinado, modelo);
+  dibujarPlantillaHojaRespuestasEnPagina(docCombinado, modelo, testsIncluidos);
   const combinadoBlob = docCombinado.output('blob');
   const combinadoNombreArchivo = `Completo_Examen_y_Hoja_Respuestas_Modelo_${modelo}_${slug}.pdf`;
 
@@ -1187,21 +1401,6 @@ export function generarPaquetePDFOficial(
     codigoPieAplicado,
     totalOrdinarias,
     totalReservas,
+    testsIncluidos,
   };
-}
-
-/**
- * Genera y lanza automáticamente la descarga tanto del Cuadernillo de Examen PDF
- * como de la Plantilla Oficial de Hoja de Respuestas OMR en Blanco.
- */
-export function exportarExamenYPlantillaOficialPDF(
-  examen: ExamenCompleto,
-  opciones?: OpcionesExportacionPDFOficial
-): ResultadoGeneracionPDFOficial {
-  const paquete = generarPaquetePDFOficial(examen, opciones);
-  descargarBlobPDF(paquete.cuadernilloBlob, paquete.cuadernilloNombreArchivo);
-  setTimeout(() => {
-    descargarBlobPDF(paquete.plantillaOMRBlob, paquete.plantillaOMRNombreArchivo);
-  }, 320);
-  return paquete;
 }

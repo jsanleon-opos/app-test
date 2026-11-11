@@ -3,21 +3,35 @@ import { ExamenCompleto } from '../types';
 import {
   deducirCodigoPiePorDefecto,
   descargarBlobPDF,
+  eliminarRegistroTestDescargadoDeLocalStorage,
   generarPaquetePDFOficial,
+  leerTestsDescargadosDeLocalStorage,
+  limpiarTestsDescargadosDeLocalStorage,
+  registrarDescargaTestEnLocalStorage,
+  RegistroTestDescargadoPDF,
   ResultadoGeneracionPDFOficial,
 } from '../utils/officialPdfExporter';
 
 interface ExportarExamenPdfModalProps {
   examen: ExamenCompleto | null;
-  paqueteInicial?: ResultadoGeneracionPDFOficial | null;
   supuestosDisponibles?: ExamenCompleto[];
+  historialPruebas?: ExamenCompleto[];
+  onNotificarDescarga?: (mensaje: string) => void;
   onClose: () => void;
 }
 
+const ETIQUETA_TIPO_ARCHIVO: Record<RegistroTestDescargadoPDF['tipoArchivo'], string> = {
+  examen_y_plantilla: 'Examen + Plantilla (2 PDF)',
+  todo_en_1_pdf: 'Examen + Plantilla (1 PDF)',
+  solo_examen: 'Cuadernillo Examen PDF',
+  solo_plantilla: 'Plantilla OMR en blanco',
+};
+
 export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
   examen,
-  paqueteInicial,
   supuestosDisponibles = [],
+  historialPruebas = [],
+  onNotificarDescarga,
   onClose,
 }) => {
   const [modelo, setModelo] = useState<'A' | 'B'>('A');
@@ -25,6 +39,12 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
   const [incluirSoluciones, setIncluirSoluciones] = useState<boolean>(true);
   const [supuestoExtra1Id, setSupuestoExtra1Id] = useState<string>('');
   const [supuestoExtra2Id, setSupuestoExtra2Id] = useState<string>('');
+  const [descargaRealizadaEnSesion, setDescargaRealizadaEnSesion] = useState<boolean>(false);
+  const [testsDescargados, setTestsDescargados] = useState<RegistroTestDescargadoPDF[]>(() =>
+    leerTestsDescargadosDeLocalStorage()
+  );
+  const [mostrarListaCompletaDescargados, setMostrarListaCompletaDescargados] =
+    useState<boolean>(false);
 
   useEffect(() => {
     if (examen) {
@@ -33,6 +53,8 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
       setIncluirSoluciones(true);
       setSupuestoExtra1Id('');
       setSupuestoExtra2Id('');
+      setDescargaRealizadaEnSesion(false);
+      setTestsDescargados(leerTestsDescargadosDeLocalStorage());
     }
   }, [examen]);
 
@@ -63,17 +85,6 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
 
   const paqueteActual = useMemo<ResultadoGeneracionPDFOficial | null>(() => {
     if (!examen) return null;
-    const usaValoresPorDefecto =
-      paqueteInicial &&
-      modelo === 'A' &&
-      incluirSoluciones === true &&
-      !supuestoExtra1Id &&
-      !supuestoExtra2Id &&
-      codigoPie.trim() === paqueteInicial.codigoPieAplicado;
-
-    if (usaValoresPorDefecto) {
-      return paqueteInicial;
-    }
 
     const sup1 = listaSupuestos.find((s) => s.id === supuestoExtra1Id) || null;
     const sup2 = listaSupuestos.find((s) => s.id === supuestoExtra2Id) || null;
@@ -87,7 +98,6 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
     });
   }, [
     examen,
-    paqueteInicial,
     modelo,
     codigoPie,
     incluirSoluciones,
@@ -96,7 +106,75 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
     listaSupuestos,
   ]);
 
+  const comprobarSiYaRealizadoEnHistorial = (reg: RegistroTestDescargadoPDF): boolean => {
+    if (!Array.isArray(historialPruebas) || historialPruebas.length === 0) return false;
+    const tituloRegNorm = reg.tituloPrincipal.trim().toLowerCase();
+    return historialPruebas.some((h) => {
+      if (!h.resultado) return false;
+      if (h.id === reg.examenId || (reg.testBaseId && h.testBaseId === reg.testBaseId)) {
+        return true;
+      }
+      if (h.testBaseId === reg.examenId) return true;
+      return h.titulo.trim().toLowerCase() === tituloRegNorm;
+    });
+  };
+
+  const ejecutarDescargaExplicita = (
+    tipoArchivo: RegistroTestDescargadoPDF['tipoArchivo']
+  ) => {
+    if (!examen || !paqueteActual) return;
+
+    if (tipoArchivo === 'solo_examen') {
+      descargarBlobPDF(
+        paqueteActual.cuadernilloBlob,
+        paqueteActual.cuadernilloNombreArchivo
+      );
+    } else if (tipoArchivo === 'solo_plantilla') {
+      descargarBlobPDF(
+        paqueteActual.plantillaOMRBlob,
+        paqueteActual.plantillaOMRNombreArchivo
+      );
+    } else if (tipoArchivo === 'todo_en_1_pdf') {
+      descargarBlobPDF(
+        paqueteActual.combinadoBlob,
+        paqueteActual.combinadoNombreArchivo
+      );
+    } else if (tipoArchivo === 'examen_y_plantilla') {
+      descargarBlobPDF(
+        paqueteActual.cuadernilloBlob,
+        paqueteActual.cuadernilloNombreArchivo
+      );
+      setTimeout(() => {
+        descargarBlobPDF(
+          paqueteActual.plantillaOMRBlob,
+          paqueteActual.plantillaOMRNombreArchivo
+        );
+      }, 320);
+    }
+
+    const actualizados = registrarDescargaTestEnLocalStorage({
+      examenId: examen.id,
+      testBaseId: examen.testBaseId || examen.id,
+      tituloPrincipal: examen.titulo,
+      testsIncluidos: paqueteActual.testsIncluidos,
+      modelo,
+      tipoArchivo,
+    });
+    setTestsDescargados(actualizados);
+    setDescargaRealizadaEnSesion(true);
+
+    if (onNotificarDescarga) {
+      onNotificarDescarga(
+        `Descarga iniciada (${ETIQUETA_TIPO_ARCHIVO[tipoArchivo]}): "${examen.titulo}".`
+      );
+    }
+  };
+
   if (!examen || !paqueteActual) return null;
+
+  const registrosVisibles = mostrarListaCompletaDescargados
+    ? testsDescargados
+    : testsDescargados.slice(0, 3);
 
   return (
     <div
@@ -107,35 +185,163 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
         className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border-2 border-slate-300 dark:border-slate-700 space-y-4 max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Cabecera */}
-        <div className="flex items-start justify-between gap-3 border-b-2 border-slate-200 dark:border-slate-700 pb-3.5">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0">
-              <i className="fa-solid fa-file-pdf"></i>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                  Exportación Oficial a PDF + Plantilla de Respuestas
-                </h3>
-                <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                  ✓ Descarga generada
-                </span>
+        {/* ENCABEZADO DE LA VENTANA DE DESCARGA (Incluye prueba actual y registro de qué tests se han descargado para realizar) */}
+        <div className="border-b-2 border-slate-200 dark:border-slate-700 pb-3.5 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0">
+                <i className="fa-solid fa-file-pdf"></i>
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">
-                <strong>{examen.titulo}</strong>
-              </p>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    Descargar Test y Plantilla Oficial en PDF
+                  </h3>
+                  {descargaRealizadaEnSesion ? (
+                    <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                      ✓ Descarga iniciada
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600">
+                      Elige qué archivo descargar
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  No se descarga ningún archivo automáticamente: revisa las opciones y pulsa el botón de descarga deseado.
+                </p>
+              </div>
             </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center text-sm cursor-pointer shrink-0"
+              title="Cerrar ventana"
+            >
+              <i className="fa-solid fa-xmark"></i>
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center text-sm cursor-pointer shrink-0"
-            title="Cerrar ventana"
-          >
-            <i className="fa-solid fa-xmark"></i>
-          </button>
+          {/* Bloque 1 del encabezado: Test / Pruebas preparadas en el encabezado de esta descarga */}
+          <div className="p-3 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/35 border border-indigo-200 dark:border-indigo-800 space-y-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-800 dark:text-indigo-300 flex items-center gap-1.5">
+                <i className="fa-solid fa-heading text-indigo-600 dark:text-indigo-400"></i>
+                <span>Encabezado del PDF · Test preparado para realizar:</span>
+              </span>
+              <span className="text-[10px] font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                Modelo {modelo} · {paqueteActual.totalOrdinarias} ord.
+                {paqueteActual.totalReservas > 0 ? ` + ${paqueteActual.totalReservas} res.` : ''}
+              </span>
+            </div>
+            <ul className="space-y-0.5 text-xs font-bold text-slate-900 dark:text-white">
+              {paqueteActual.testsIncluidos.map((item, idx) => (
+                <li key={idx} className="flex items-start gap-1.5 leading-snug">
+                  <i className="fa-solid fa-circle-dot text-[8px] text-indigo-600 dark:text-indigo-400 mt-1 shrink-0"></i>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Bloque 2 del encabezado: Registro de qué tests se han descargado para realizar */}
+          <div className="p-3 rounded-2xl bg-slate-100/95 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <i className="fa-solid fa-clipboard-list text-rose-600 dark:text-rose-400"></i>
+                <span>Tests descargados para realizar ({testsDescargados.length})</span>
+              </span>
+
+              {testsDescargados.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {testsDescargados.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarListaCompletaDescargados((prev) => !prev)}
+                      className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      {mostrarListaCompletaDescargados
+                        ? 'Ver menos'
+                        : `Ver todos (${testsDescargados.length})`}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setTestsDescargados(limpiarTestsDescargadosDeLocalStorage())}
+                    className="text-[10px] font-mono font-bold text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 cursor-pointer"
+                    title="Vaciar listado de tests descargados"
+                  >
+                    Limpiar lista
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {testsDescargados.length === 0 ? (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                Aún no has descargado ningún test en PDF. Al pulsar cualquiera de los botones de descarga inferiores quedará anotado aquí para tu control.
+              </p>
+            ) : (
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                {registrosVisibles.map((reg) => {
+                  const yaRealizado = comprobarSiYaRealizadoEnHistorial(reg);
+                  const fechaCorta = reg.fechaDescargaISO
+                    ? reg.fechaDescargaISO.slice(0, 16).replace('T', ' ')
+                    : '';
+                  return (
+                    <div
+                      key={reg.id}
+                      className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-start justify-between gap-2 text-[11px]"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 leading-snug break-words">
+                          {reg.testsIncluidos && reg.testsIncluidos.length > 0
+                            ? reg.testsIncluidos.join(' · ')
+                            : reg.tituloPrincipal}
+                        </div>
+                        <div className="text-[9.5px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span>Mod. {reg.modelo}</span>
+                          <span>•</span>
+                          <span>{ETIQUETA_TIPO_ARCHIVO[reg.tipoArchivo]}</span>
+                          {fechaCorta && (
+                            <>
+                              <span>•</span>
+                              <span>{fechaCorta}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded border ${
+                            yaRealizado
+                              ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                              : 'bg-amber-50 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                          }`}
+                        >
+                          {yaRealizado ? '✓ Realizado' : 'Pendiente'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTestsDescargados(
+                              eliminarRegistroTestDescargadoDeLocalStorage(reg.id)
+                            )
+                          }
+                          className="h-5 w-5 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 flex items-center justify-center cursor-pointer"
+                          title="Quitar de la lista de tests descargados"
+                        >
+                          <i className="fa-solid fa-xmark text-[10px]"></i>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Dos cuadros diferenciados: 1) Cuadernillo de Examen y 2) Plantilla Oficial Hoja de Respuestas */}
@@ -156,22 +362,13 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
                 Cuadernillo Oficial Modelo {modelo}
               </h4>
               <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-                Formato oficial INAP/CPS con cabeceras encuadradas, enunciados en negrita justificados, opciones <em>a) b) c) d)</em> ({paqueteActual.totalOrdinarias} ordinarias
-                {paqueteActual.totalReservas > 0
-                  ? ` + ${paqueteActual.totalReservas} de reserva`
-                  : ''}
-                ) y pie <em>Página X de Y</em>.
+                Formato oficial INAP/CPS con encabezado del test a realizar, secciones encuadradas, enunciados justificados y opciones <em>a) b) c) d)</em>.
               </p>
             </div>
 
             <button
               type="button"
-              onClick={() =>
-                descargarBlobPDF(
-                  paqueteActual.cuadernilloBlob,
-                  paqueteActual.cuadernilloNombreArchivo
-                )
-              }
+              onClick={() => ejecutarDescargaExplicita('solo_examen')}
               className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <i className="fa-solid fa-file-arrow-down"></i>
@@ -200,12 +397,7 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
 
             <button
               type="button"
-              onClick={() =>
-                descargarBlobPDF(
-                  paqueteActual.plantillaOMRBlob,
-                  paqueteActual.plantillaOMRNombreArchivo
-                )
-              }
+              onClick={() => ejecutarDescargaExplicita('solo_plantilla')}
               className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <i className="fa-solid fa-table-cells"></i>
@@ -214,37 +406,42 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
           </div>
         </div>
 
-        {/* Botón rápido para descargar ambos juntos en un único archivo PDF */}
-        <div className="p-3 rounded-2xl bg-amber-50/90 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-700/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Acciones conjuntas: Descargar ambos archivos por separado o todo unido en 1 único PDF */}
+        <div className="p-3.5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-700/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="text-xs text-slate-700 dark:text-slate-200">
             <span className="font-black text-amber-900 dark:text-amber-200 block">
-              ¿Prefieres imprimir todo de una sola vez?
+              Descargar Examen + Plantilla Oficial de Respuestas juntos
             </span>
             <span className="text-[11px] text-slate-600 dark:text-slate-300">
-              Une el cuadernillo de examen y la hoja oficial de respuestas en blanco en un único fichero PDF.
+              Elige si prefieres ambos en un único PDF listo para imprimir o en 2 archivos PDF separados.
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() =>
-              descargarBlobPDF(
-                paqueteActual.combinadoBlob,
-                paqueteActual.combinadoNombreArchivo
-              )
-            }
-            className="py-2 px-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black flex items-center justify-center gap-1.5 shrink-0 shadow-xs transition-all cursor-pointer"
-          >
-            <i className="fa-solid fa-layer-group"></i>
-            <span>Descargar Todo en 1 PDF</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => ejecutarDescargaExplicita('examen_y_plantilla')}
+              className="py-2 px-3 rounded-xl bg-white dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-slate-700 text-amber-900 dark:text-amber-200 border border-amber-400 dark:border-amber-600 text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+            >
+              <i className="fa-solid fa-copy"></i>
+              <span>2 PDF separados</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => ejecutarDescargaExplicita('todo_en_1_pdf')}
+              className="py-2 px-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            >
+              <i className="fa-solid fa-layer-group"></i>
+              <span>Todo en 1 PDF</span>
+            </button>
+          </div>
         </div>
 
-        {/* Opciones de personalización del cuadernillo antes de volver a descargar */}
+        {/* Opciones de personalización del cuadernillo antes de descargar */}
         <div className="p-4 rounded-2xl bg-slate-100/90 dark:bg-slate-800/80 border-2 border-slate-300 dark:border-slate-700 space-y-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[10.5px] font-mono font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
               <i className="fa-solid fa-sliders text-indigo-600"></i>
-              <span>Ajustes del formato de exportación</span>
+              <span>Ajustes previos a la descarga</span>
             </span>
           </div>
 

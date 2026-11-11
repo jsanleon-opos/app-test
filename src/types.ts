@@ -226,6 +226,7 @@ export interface ExamenCompleto {
   tematicas: TematicaNormativaId[];
   contextoCaso?: string; // Solo para supuestos prácticos: relato de hechos administrativos
   leyesBOEAplicadas: string[];
+  testsIncluidos?: string[]; // Títulos específicos de los tests/supuestos que integran la prueba (ej. en Simulacro Oficial)
   preguntas: PreguntaExamen[];
   resultado?: ResultadoExamen;
   anotaciones?: AnotacionResaltado[];

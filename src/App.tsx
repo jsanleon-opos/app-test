@@ -18,10 +18,6 @@ import { SeccionTestPreguntasFalladas } from './components/SeccionTestPreguntasF
 import { SelectorLeyesEInformaticaModal } from './components/SelectorLeyesEInformaticaModal';
 import { ExportarExamenPdfModal } from './components/ExportarExamenPdfModal';
 import {
-  exportarExamenYPlantillaOficialPDF,
-  ResultadoGeneracionPDFOficial,
-} from './utils/officialPdfExporter';
-import {
   CATEGORIAS_TEMARIO_PROGRESO,
   CategoriaTemarioId,
   clasificarExamenEnCategoriasTemario,
@@ -93,10 +89,7 @@ export default function App() {
   const [mostrarModalBackup, setMostrarModalBackup] = useState<boolean>(false);
   const [mostrarModalVersion, setMostrarModalVersion] = useState<boolean>(false);
   const [examenEditandoLeyesHistorial, setExamenEditandoLeyesHistorial] = useState<ExamenCompleto | null>(null);
-  const [exportacionPDFActiva, setExportacionPDFActiva] = useState<{
-    examen: ExamenCompleto;
-    paquete: ResultadoGeneracionPDFOficial;
-  } | null>(null);
+  const [examenParaExportarPDF, setExamenParaExportarPDF] = useState<ExamenCompleto | null>(null);
   const [toastNotificacion, setToastNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
 
   // History format toggle ('listado' with all metrics vs 'tarjetas')
@@ -126,17 +119,7 @@ export default function App() {
   };
 
   const handleExportarExamenAPDF = (examen: ExamenCompleto) => {
-    try {
-      const paquete = exportarExamenYPlantillaOficialPDF(examen);
-      setExportacionPDFActiva({ examen, paquete });
-      mostrarToast(
-        `Exportado "${examen.titulo}" en PDF oficial + Plantilla de hoja de respuestas en blanco.`,
-        'exito'
-      );
-    } catch (err) {
-      console.error('Error al exportar examen a PDF oficial:', err);
-      mostrarToast('No se pudo generar la exportación en PDF de esta prueba.', 'error');
-    }
+    setExamenParaExportarPDF(examen);
   };
 
   const [examenesEliminadosIds, setExamenesEliminadosIds] = useState<string[]>(() => {
@@ -3464,12 +3447,13 @@ export default function App() {
         />
       )}
 
-      {/* MODAL DE EXPORTACIÓN EN PDF OFICIAL + PLANTILLA DE HOJA DE RESPUESTAS EN BLANCO */}
+      {/* MODAL DE EXPORTACIÓN EN PDF OFICIAL + PLANTILLA DE HOJA DE RESPUESTAS EN BLANCO (Sin descarga automática al abrir) */}
       <ExportarExamenPdfModal
-        examen={exportacionPDFActiva?.examen || null}
-        paqueteInicial={exportacionPDFActiva?.paquete || null}
+        examen={examenParaExportarPDF}
         supuestosDisponibles={bancoExamenes}
-        onClose={() => setExportacionPDFActiva(null)}
+        historialPruebas={historialPruebas}
+        onNotificarDescarga={(mensaje) => mostrarToast(mensaje, 'exito')}
+        onClose={() => setExamenParaExportarPDF(null)}
       />
 
       {/* MODAL DE VERSIÓN 3.4 Y ÚLTIMOS CAMBIOS */}
@@ -3484,10 +3468,10 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      Notas de Versión v3.4.0
+                      Notas de Versión v3.4.1
                     </h3>
                     <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
-                      PDF Formato Oficial + Plantilla OMR en Blanco
+                      PDF Bajo Demanda + Encabezado de Tests Descargados
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -3508,12 +3492,12 @@ export default function App() {
               <div className="p-3.5 rounded-2xl bg-rose-50/90 dark:bg-rose-950/40 border-2 border-rose-300 dark:border-rose-800/80 space-y-1.5">
                 <div className="font-black text-rose-900 dark:text-rose-200 flex items-center gap-2">
                   <i className="fa-solid fa-file-pdf text-rose-600"></i>
-                  <span>Novedad v3.4 · Exportación de Tests y Supuestos en PDF Oficial + Plantilla Hoja de Respuestas</span>
+                  <span>Novedad v3.4.1 · Ventana de Descarga Bajo Demanda y Encabezado de Tests Descargados</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • <strong>Cuadernillo PDF con maquetación oficial CPS/INAP</strong>: Cabeceras encuadradas (<em>PRIMERA PARTE</em>, <em>SUPUESTO I</em>, <em>SUPUESTO II</em>), enunciados numerados en negrita justificados, opciones <em>a) b) c) d)</em> en doble columna automática cuando son breves o columna completa, bloque subrayado de <em>Preguntas de reserva</em>, pie oficial con código de modelo y <em>Página X de Y</em>, y hoja final opcional de <em>Plantilla Definitiva de Respuestas</em>.<br />
-                  • <strong>Plantilla Oficial de Hoja de Respuestas OMR en cada exportación</strong>: Se genera automáticamente la hoja oficial verde (<em>Ejemplar para el interesado</em>) con casillas de datos en blanco, recuadro de firma vacío, Primera Parte (1–70 + 5 de reserva) y Segunda Parte Supuesto Práctico (Supuesto I/II + 1–20 + 5 de reserva), descartando cualquier dato personal o respuesta marcada.<br />
-                  • <strong>Disponible en todas las secciones</strong>: Generador IA, Simulacro Oficial 70+20, Test de Falladas, Banco de Exámenes e Historial, con opción de descargar por separado o unido en un único PDF.
+                  • <strong>Apertura sin descarga automática</strong>: Al pulsar exportar PDF / plantilla oficial únicamente se abre la ventana de descarga para configurar opciones y elegir explícitamente qué descargar (<em>Examen PDF</em>, <em>Plantilla en blanco</em>, <em>2 PDF separados</em> o <em>Todo en 1 PDF</em>).<br />
+                  • <strong>Encabezado con los tests descargados para realizar</strong>: El encabezado de la ventana muestra tanto el test/supuesto preparado como el listado de <em>Tests descargados para realizar</em> (indicando si están pendientes o ya realizados), y el propio encabezado del PDF y de la plantilla identifica la prueba descargada.<br />
+                  • <strong>Formato oficial CPS/INAP + Hoja OMR en blanco</strong>: Primera Parte, Supuestos I/II, opciones <em>a) b) c) d)</em>, preguntas de reserva y hoja verde de respuestas sin datos personales ni marcas.
                 </p>
               </div>
 
