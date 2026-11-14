@@ -25,6 +25,7 @@ const ETIQUETA_TIPO_ARCHIVO: Record<RegistroTestDescargadoPDF['tipoArchivo'], st
   todo_en_1_pdf: 'Examen + Plantilla (1 PDF)',
   solo_examen: 'Cuadernillo Examen PDF',
   solo_plantilla: 'Plantilla OMR en blanco',
+  solo_anexo_boe: 'Anexo Comentado BOE',
 };
 
 export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
@@ -37,6 +38,10 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
   const [modelo, setModelo] = useState<'A' | 'B'>('A');
   const [codigoPie, setCodigoPie] = useState<string>('');
   const [incluirSoluciones, setIncluirSoluciones] = useState<boolean>(true);
+  const [incluirPortada, setIncluirPortada] = useState<boolean>(false);
+  const [incluirAnexoBOE, setIncluirAnexoBOE] = useState<boolean>(false);
+  const [barajarPreguntas, setBarajarPreguntas] = useState<boolean>(false);
+  const [semillaBarajado, setSemillaBarajado] = useState<number>(202611);
   const [supuestoExtra1Id, setSupuestoExtra1Id] = useState<string>('');
   const [supuestoExtra2Id, setSupuestoExtra2Id] = useState<string>('');
   const [descargaRealizadaEnSesion, setDescargaRealizadaEnSesion] = useState<boolean>(false);
@@ -51,6 +56,10 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
       setModelo('A');
       setCodigoPie(deducirCodigoPiePorDefecto(examen, 'A'));
       setIncluirSoluciones(true);
+      setIncluirPortada(false);
+      setIncluirAnexoBOE(false);
+      setBarajarPreguntas(false);
+      setSemillaBarajado(202611);
       setSupuestoExtra1Id('');
       setSupuestoExtra2Id('');
       setDescargaRealizadaEnSesion(false);
@@ -93,6 +102,10 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
       modelo,
       codigoPiePagina: codigoPie,
       incluirPlantillaSoluciones: incluirSoluciones,
+      incluirPortadaInstruccionesTribunal: incluirPortada,
+      incluirAnexoJustificacionesBOE: incluirAnexoBOE,
+      barajarPreguntas,
+      semillaBarajado,
       supuestoAdicional1: sup1,
       supuestoAdicional2: sup2,
     });
@@ -101,6 +114,10 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
     modelo,
     codigoPie,
     incluirSoluciones,
+    incluirPortada,
+    incluirAnexoBOE,
+    barajarPreguntas,
+    semillaBarajado,
     supuestoExtra1Id,
     supuestoExtra2Id,
     listaSupuestos,
@@ -138,6 +155,11 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
       descargarBlobPDF(
         paqueteActual.combinadoBlob,
         paqueteActual.combinadoNombreArchivo
+      );
+    } else if (tipoArchivo === 'solo_anexo_boe') {
+      descargarBlobPDF(
+        paqueteActual.anexoJustificacionesBlob,
+        paqueteActual.anexoJustificacionesNombreArchivo
       );
     } else if (tipoArchivo === 'examen_y_plantilla') {
       descargarBlobPDF(
@@ -484,18 +506,81 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
             </div>
           </div>
 
-          {/* Checkbox para incluir o excluir la página final de Plantilla Definitiva de Respuestas */}
-          <label className="flex items-center gap-2.5 cursor-pointer select-none pt-1">
-            <input
-              type="checkbox"
-              checked={incluirSoluciones}
-              onChange={(e) => setIncluirSoluciones(e.target.checked)}
-              className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-            />
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              Incluir al final la hoja <strong>«PLANTILLA DEFINITIVA DE RESPUESTAS»</strong> (como en la última página del examen oficial)
-            </span>
-          </label>
+          {/* Opciones adicionales de contenido oficial */}
+          <div className="space-y-2 pt-1">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={incluirSoluciones}
+                onChange={(e) => setIncluirSoluciones(e.target.checked)}
+                className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Incluir al final la hoja <strong>«PLANTILLA DEFINITIVA DE RESPUESTAS»</strong>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={incluirPortada}
+                onChange={(e) => setIncluirPortada(e.target.checked)}
+                className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Añadir <strong>Portada Oficial de Instrucciones del Tribunal (CPS / INAP)</strong> al inicio
+              </span>
+            </label>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={incluirAnexoBOE}
+                  onChange={(e) => setIncluirAnexoBOE(e.target.checked)}
+                  className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Adjuntar al final <strong>Anexo de Corrección y Fundamentación BOE</strong> ({paqueteActual.paginasAnexoJustificaciones} pág.)
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => ejecutarDescargaExplicita('solo_anexo_boe')}
+                className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-slate-800 border border-indigo-300 dark:border-indigo-700 text-[10.5px] font-bold text-indigo-700 dark:text-indigo-300 inline-flex items-center gap-1 cursor-pointer"
+                title="Descargar solo el Anexo de Corrección Comentada BOE en un PDF independiente"
+              >
+                <i className="fa-solid fa-scale-balanced text-[9.5px]"></i>
+                <span>Descargar Anexo BOE suelto</span>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={barajarPreguntas}
+                  onChange={(e) => setBarajarPreguntas(e.target.checked)}
+                  className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  <strong>Barajar el orden de preguntas</strong> (recalcula clave y anexo automáticamente)
+                </span>
+              </label>
+
+              {barajarPreguntas && (
+                <button
+                  type="button"
+                  onClick={() => setSemillaBarajado((s) => s + 37)}
+                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-600 text-[10.5px] font-bold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <i className="fa-solid fa-shuffle text-[9.5px]"></i>
+                  <span>Nuevo orden</span>
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* Selector opcional para anexar Supuesto I / Supuesto II si existen en el Banco */}
           {listaSupuestos.length > 0 && (

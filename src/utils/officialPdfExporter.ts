@@ -5,6 +5,11 @@ export interface OpcionesExportacionPDFOficial {
   modelo?: 'A' | 'B';
   codigoPiePagina?: string;
   incluirPlantillaSoluciones?: boolean;
+  incluirPortadaInstruccionesTribunal?: boolean;
+  incluirAnexoJustificacionesBOE?: boolean;
+  barajarPreguntas?: boolean;
+  semillaBarajado?: number;
+  duracionMinutosPortada?: number;
   subtituloCuerpo?: string;
   supuestoAdicional1?: ExamenCompleto | null;
   supuestoAdicional2?: ExamenCompleto | null;
@@ -28,10 +33,14 @@ export interface ResultadoGeneracionPDFOficial {
   plantillaOMRNombreArchivo: string;
   combinadoBlob: Blob;
   combinadoNombreArchivo: string;
+  anexoJustificacionesBlob: Blob;
+  anexoJustificacionesNombreArchivo: string;
+  paginasAnexoJustificaciones: number;
   codigoPieAplicado: string;
   totalOrdinarias: number;
   totalReservas: number;
   testsIncluidos: string[];
+  resumenSecciones: Array<{ titulo: string; ordinarias: number; reservas: number }>;
 }
 
 export interface RegistroTestDescargadoPDF {
@@ -41,7 +50,12 @@ export interface RegistroTestDescargadoPDF {
   tituloPrincipal: string;
   testsIncluidos: string[];
   modelo: 'A' | 'B';
-  tipoArchivo: 'examen_y_plantilla' | 'todo_en_1_pdf' | 'solo_examen' | 'solo_plantilla';
+  tipoArchivo:
+    | 'examen_y_plantilla'
+    | 'todo_en_1_pdf'
+    | 'solo_examen'
+    | 'solo_plantilla'
+    | 'solo_anexo_boe';
   fechaDescargaISO: string;
 }
 
@@ -221,6 +235,20 @@ export function deducirSubtituloCuerpoPorDefecto(examen: ExamenCompleto): string
   return 'Cuerpo General Administrativo de la Administración del Estado - Ingreso Libre';
 }
 
+function barajarArrayDeterminista<T>(items: T[], semillaBase: number): T[] {
+  const copia = [...items];
+  let s = (Math.abs(Math.floor(semillaBase)) || 1234567) % 2147483647;
+  if (s <= 0) s = 9876543;
+  for (let i = copia.length - 1; i > 0; i--) {
+    s = (s * 16807) % 2147483647;
+    const j = s % (i + 1);
+    const tmp = copia[i];
+    copia[i] = copia[j];
+    copia[j] = tmp;
+  }
+  return copia;
+}
+
 /**
  * Extrae las secciones estructuradas (Primera Parte, Supuesto I, Supuesto II...)
  * a partir de cualquier ExamenCompleto (Test unitario, Supuesto práctico o Simulacro Unificado 70+20).
@@ -316,6 +344,15 @@ function construirSeccionesCuadernillo(
     });
   });
 
+  if (opciones?.barajarPreguntas) {
+    const semilla = opciones.semillaBarajado || 202601;
+    return secciones.map((sec, idx) => ({
+      ...sec,
+      preguntasOrdinarias: barajarArrayDeterminista(sec.preguntasOrdinarias, semilla + idx * 97),
+      preguntasReserva: barajarArrayDeterminista(sec.preguntasReserva, semilla + idx * 193 + 31),
+    }));
+  }
+
   return secciones;
 }
 
@@ -393,7 +430,12 @@ function renderizarCuadernilloEnDocumento(
   doc: jsPDF,
   examen: ExamenCompleto,
   opciones?: OpcionesExportacionPDFOficial
-): { paginasCuadernillo: number; totalOrdinarias: number; totalReservas: number } {
+): {
+  paginasCuadernillo: number;
+  totalOrdinarias: number;
+  totalReservas: number;
+  seccionesRenderizadas: BloqueSeccionCuadernillo[];
+} {
   const modelo = opciones?.modelo || 'A';
   const codigoPie =
     opciones?.codigoPiePagina?.trim() || deducirCodigoPiePorDefecto(examen, modelo);
@@ -685,7 +727,20 @@ function renderizarCuadernilloEnDocumento(
   let totalOrdinarias = 0;
   let totalReservas = 0;
 
-  // Encabezado inicial en la portada del cuadernillo indicando qué test(s) se han descargado para realizar
+  if (opciones?.incluirPortadaInstruccionesTribunal) {
+    renderizarPortadaInstruccionesTribunalEnPaginaActual(
+      doc,
+      examen,
+      secciones,
+      modelo,
+      subtituloCuerpo,
+      testsIncluidos,
+      opciones.duracionMinutosPortada || 100
+    );
+    nuevaPaginaCuadernillo();
+  }
+
+  // Encabezado inicial en la primera página de preguntas indicando qué test(s) se han descargado para realizar
   dibujarEncabezadoTestsDescargadosPortada();
 
   // Renderizado secuencial de todas las secciones del cuadernillo
@@ -726,12 +781,13 @@ function renderizarCuadernilloEnDocumento(
   const textoCabeceraCorrida = normalizarTextoParaPDFOficial(
     `Prueba para realizar: ${testsIncluidos.join('  |  ')}`
   );
+  const paginaInicioPreguntas = opciones?.incluirPortadaInstruccionesTribunal ? 2 : 1;
 
-  // Estampar encabezado corrido en páginas 2..N y pie de página oficial en todas las páginas
+  // Estampar encabezado corrido en páginas interiores y pie de página oficial en todas las páginas
   for (let p = 1; p <= paginasCuadernillo; p++) {
     doc.setPage(p);
 
-    if (p > 1 && testsIncluidos.length > 0) {
+    if (p > paginaInicioPreguntas && testsIncluidos.length > 0) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.2);
       doc.setTextColor(80, 80, 80);
@@ -764,7 +820,24 @@ function renderizarCuadernilloEnDocumento(
     );
   }
 
-  return { paginasCuadernillo, totalOrdinarias, totalReservas };
+  // Páginas adicionales opcionales: ANEXO DE CORRECCIÓN COMENTADA CON FUNDAMENTACIÓN BOE
+  if (opciones?.incluirAnexoJustificacionesBOE) {
+    renderizarAnexoJustificacionesBOE(
+      doc,
+      secciones,
+      modelo,
+      subtituloCuerpo,
+      testsIncluidos,
+      true
+    );
+  }
+
+  return {
+    paginasCuadernillo,
+    totalOrdinarias,
+    totalReservas,
+    seccionesRenderizadas: secciones,
+  };
 }
 
 /**
@@ -953,6 +1026,276 @@ function renderizarPaginaPlantillaDefinitivaSoluciones(
 
   dibujarColumnaClave(bloquesIzquierda, 18.5);
   dibujarColumnaClave(bloquesDerecha, 111.5);
+}
+
+/**
+ * Renderiza una Portada Oficial de Instrucciones del Tribunal Calificador (estilo CPS / INAP)
+ * para realizar simulacros impresos con todas las pautas reales de examen.
+ */
+function renderizarPortadaInstruccionesTribunalEnPaginaActual(
+  doc: jsPDF,
+  examen: ExamenCompleto,
+  secciones: BloqueSeccionCuadernillo[],
+  modelo: 'A' | 'B',
+  subtituloCuerpo: string,
+  testsIncluidos: string[],
+  duracionMinutos: number
+) {
+  const X = 18;
+  const W = 174;
+
+  // Cabecera institucional superior encuadrada
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(248, 250, 252);
+  doc.setLineWidth(0.45);
+  doc.rect(X, 18, W, 28, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text(
+    examen.ambito === 'CAM'
+      ? 'COMUNIDAD DE MADRID - PROCESOS SELECTIVOS FUNCIÓN PÚBLICA'
+      : 'COMISIÓN PERMANENTE DE SELECCIÓN - INSTITUTO NACIONAL DE ADMINISTRACIÓN PÚBLICA',
+    105,
+    25.5,
+    { align: 'center' }
+  );
+
+  doc.setFontSize(11.5);
+  doc.setTextColor(0, 0, 0);
+  const linCuerpo = doc.splitTextToSize(normalizarTextoParaPDFOficial(subtituloCuerpo), W - 12);
+  doc.text(linCuerpo[0] || subtituloCuerpo, 105, 33.2, { align: 'center' });
+
+  doc.setFontSize(13);
+  doc.text(`EJERCICIO ÚNICO - CUADERNILLO MODELO ${modelo}`, 105, 41.5, {
+    align: 'center',
+  });
+
+  // Recuadro de identificación de las pruebas incluidas
+  let y = 53;
+  doc.setDrawColor(70, 70, 70);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.28);
+  const lineasTests: string[] = [];
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  testsIncluidos.forEach((t) => {
+    const env = doc.splitTextToSize(`- ${normalizarTextoParaPDFOficial(t)}`, W - 10);
+    lineasTests.push(...env);
+  });
+  const altoCajaTests = Math.max(16, 8 + lineasTests.length * 4.2 + 3);
+  doc.rect(X, y, W, altoCajaTests, 'FD');
+  doc.setFontSize(8.2);
+  doc.setTextColor(50, 50, 50);
+  doc.text('CONTENIDO PREPARADO EN ESTE CUADERNILLO PARA REALIZAR:', X + 4, y + 5.2);
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  let yt = y + 9.8;
+  lineasTests.forEach((l) => {
+    doc.text(l, X + 5, yt);
+    yt += 4.2;
+  });
+
+  y += altoCajaTests + 8;
+
+  // Título de Instrucciones del Tribunal
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text('INSTRUCCIONES OFICIALES PARA LA REALIZACIÓN DEL EJERCICIO', 105, y, {
+    align: 'center',
+  });
+  doc.setLineWidth(0.3);
+  doc.line(X + 18, y + 1.2, X + W - 18, y + 1.2);
+  y += 8.5;
+
+  const p1 = secciones.find((s) => s.tipoSeccion === 'primera_parte');
+  const sups = secciones.filter((s) => s.tipoSeccion === 'supuesto');
+  const descPartes: string[] = [];
+  if (p1) {
+    descPartes.push(
+      `Primera Parte: cuestionario de ${p1.preguntasOrdinarias.length} preguntas ordinarias${
+        p1.preguntasReserva.length > 0
+          ? ` más ${p1.preguntasReserva.length} preguntas de reserva`
+          : ''
+      }.`
+    );
+  }
+  if (sups.length > 0) {
+    descPartes.push(
+      `Segunda Parte (Supuesto Práctico): ${
+        sups.length > 1
+          ? `se proponen ${sups.length} supuestos (${sups.map((s) => s.tituloClave).join(' y ')}), debiendo elegir y resolver únicamente UNO de ellos y marcar el recuadro correspondiente en la hoja de respuestas`
+          : `consta de 1 supuesto práctico (${sups[0].tituloClave}) con ${sups[0].preguntasOrdinarias.length} preguntas ordinarias${
+              sups[0].preguntasReserva.length > 0
+                ? ` más ${sups[0].preguntasReserva.length} de reserva`
+                : ''
+            }`
+      }.`
+    );
+  }
+
+  const puntosInstrucciones = [
+    `1. No abra este cuadernillo ni comience el ejercicio hasta que se indique el inicio del tiempo cronometrado.`,
+    `2. El tiempo total máximo para la realización del ejercicio es de ${duracionMinutos} MINUTOS ininterrumpidos.`,
+    `3. Estructura de este cuadernillo: ${descPartes.join(' ')}`,
+    `4. Todas las cuestiones cuentan con cuatro respuestas alternativas (a, b, c, d), siendo solo una de ellas la correcta.`,
+    `5. Criterio oficial de valoración: todas las preguntas tienen el mismo valor. Cada contestación errónea se penalizará descontando un tercio del valor de una respuesta correcta: PD = Aciertos - (Errores / 3). Las respuestas en blanco no penalizan.`,
+    `6. Las preguntas de reserva deberán ser contestadas obligatoriamente dentro del tiempo ordinario, ya que únicamente entrarán en juego por su orden correlativo en caso de que el Tribunal acuerde la anulación de alguna pregunta ordinaria.`,
+    `7. Anote todas sus contestaciones exclusivamente en la Plantilla Oficial de Hoja de Respuestas (Modelo ${modelo}) que acompaña a este cuadernillo.`,
+  ];
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.4);
+  puntosInstrucciones.forEach((punto) => {
+    const lineas: string[] = doc.splitTextToSize(normalizarTextoParaPDFOficial(punto), W);
+    y = dibujarLineasJustificadas(doc, lineas, X, y, W, 4.35);
+    y += 2.8;
+  });
+
+  // Recuadro final de aviso clásico de examen oficial
+  const yAviso = Math.max(y + 8, 236);
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(245, 245, 245);
+  doc.setLineWidth(0.5);
+  doc.rect(X + 12, yAviso, W - 24, 16, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text('NO ABRA ESTE CUESTIONARIO HASTA QUE SE LE INDIQUE', 105, yAviso + 9.8, {
+    align: 'center',
+  });
+}
+
+/**
+ * Renderiza el Anexo de Corrección Fundamentada en Normativa BOE (respuesta correcta + norma + artículo + explicación).
+ */
+function renderizarAnexoJustificacionesBOE(
+  doc: jsPDF,
+  secciones: BloqueSeccionCuadernillo[],
+  modelo: 'A' | 'B',
+  subtituloCuerpo: string,
+  testsIncluidos: string[],
+  anadirPaginaInicial: boolean
+): number {
+  const paginasAntes = doc.getNumberOfPages();
+  if (anadirPaginaInicial) {
+    doc.addPage('a4', 'portrait');
+  }
+
+  const MARGEN_X = 15;
+  const ANCHO = 180;
+  const LIMITE_Y = 281;
+  let y = 14;
+
+  const dibujarCabeceraAnexo = () => {
+    doc.setDrawColor(0, 0, 0);
+    doc.setFillColor(248, 250, 252);
+    doc.setLineWidth(0.3);
+    doc.rect(MARGEN_X, 13, ANCHO, 14, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.8);
+    doc.setTextColor(0, 0, 0);
+    doc.text(
+      `ANEXO DE CORRECCIÓN Y FUNDAMENTACIÓN NORMATIVA BOE - MODELO ${modelo}`,
+      105,
+      17.8,
+      { align: 'center' }
+    );
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.8);
+    const sub = normalizarTextoParaPDFOficial(
+      testsIncluidos.length > 0 ? testsIncluidos.join(' | ') : subtituloCuerpo
+    );
+    doc.text(doc.splitTextToSize(sub, 172)[0] || '', 105, 22.8, { align: 'center' });
+    y = 32;
+  };
+
+  dibujarCabeceraAnexo();
+
+  const renderListaPreguntasComentadas = (tituloBloque: string, lista: PreguntaExamen[]) => {
+    if (lista.length === 0) return;
+    if (y + 16 > LIMITE_Y) {
+      doc.addPage('a4', 'portrait');
+      dibujarCabeceraAnexo();
+    }
+    doc.setFillColor(238, 242, 255);
+    doc.setDrawColor(120, 120, 140);
+    doc.setLineWidth(0.22);
+    doc.rect(MARGEN_X, y - 3.6, ANCHO, 5.8, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(20, 25, 60);
+    doc.text(normalizarTextoParaPDFOficial(tituloBloque).toUpperCase(), MARGEN_X + 2.5, y + 0.4);
+    y += 5.4;
+
+    lista.forEach((preg, idx) => {
+      const correcta = preg.opciones?.find((o) => o.esCorrecta);
+      const letra = preg.esAnulada
+        ? 'ANULADA'
+        : correcta?.id
+        ? `${correcta.id.toLowerCase()})`
+        : '-';
+      const textoResp = correcta?.texto ? limpiarTextoOpcion(correcta.texto) : '';
+      const norma = normalizarTextoParaPDFOficial(preg.justificacionLegal?.norma || 'Normativa BOE');
+      const art = normalizarTextoParaPDFOficial(preg.justificacionLegal?.articulo || '');
+      const fund = normalizarTextoParaPDFOficial(
+        preg.justificacionLegal?.fundamento || correcta?.explicacion || ''
+      );
+
+      const cabeceraLinea = `${idx + 1}. Respuesta: ${letra}${
+        textoResp ? ` ${textoResp}` : ''
+      }`;
+      const refLegal = `[${norma}${art ? ` - ${art}` : ''}]`;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.3);
+      const linCab: string[] = doc.splitTextToSize(cabeceraLinea, ANCHO - 2);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.0);
+      const textoFundCompleto = fund ? `${refLegal} ${fund}` : refLegal;
+      const linFund: string[] = doc.splitTextToSize(textoFundCompleto, ANCHO - 5);
+
+      const altoEstimado = linCab.length * 3.5 + linFund.length * 3.4 + 2.5;
+      if (y + altoEstimado > LIMITE_Y) {
+        doc.addPage('a4', 'portrait');
+        dibujarCabeceraAnexo();
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.3);
+      doc.setTextColor(0, 0, 0);
+      linCab.forEach((l) => {
+        doc.text(l, MARGEN_X, y);
+        y += 3.5;
+      });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.9);
+      doc.setTextColor(45, 55, 72);
+      linFund.forEach((l) => {
+        doc.text(l, MARGEN_X + 4, y);
+        y += 3.35;
+      });
+
+      y += 2.0;
+    });
+    y += 2.2;
+  };
+
+  secciones.forEach((sec) => {
+    renderListaPreguntasComentadas(sec.tituloClave, sec.preguntasOrdinarias);
+    if (sec.preguntasReserva.length > 0) {
+      renderListaPreguntasComentadas(
+        `${sec.tituloClave} - Preguntas de reserva`,
+        sec.preguntasReserva
+      );
+    }
+  });
+
+  const paginasDespues = doc.getNumberOfPages();
+  return anadirPaginaInicial ? paginasDespues - paginasAntes : paginasDespues;
 }
 
 // ============================================================================
@@ -1361,7 +1704,7 @@ export function generarPaquetePDFOficial(
     format: 'a4',
     compress: true,
   });
-  const { paginasCuadernillo, totalOrdinarias, totalReservas } =
+  const { paginasCuadernillo, totalOrdinarias, totalReservas, seccionesRenderizadas } =
     renderizarCuadernilloEnDocumento(docCuadernillo, examen, opciones);
   const cuadernilloBlob = docCuadernillo.output('blob');
   const cuadernilloNombreArchivo = `${slug}_Modelo_${modelo}.pdf`;
@@ -1390,6 +1733,32 @@ export function generarPaquetePDFOficial(
   const combinadoBlob = docCombinado.output('blob');
   const combinadoNombreArchivo = `Completo_Examen_y_Hoja_Respuestas_Modelo_${modelo}_${slug}.pdf`;
 
+  // 4. Generar Anexo independiente de Corrección y Fundamentación BOE
+  const subtituloCuerpo =
+    opciones?.subtituloCuerpo?.trim() || deducirSubtituloCuerpoPorDefecto(examen);
+  const docAnexo = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: true,
+  });
+  const paginasAnexoJustificaciones = renderizarAnexoJustificacionesBOE(
+    docAnexo,
+    seccionesRenderizadas,
+    modelo,
+    subtituloCuerpo,
+    testsIncluidos,
+    false
+  );
+  const anexoJustificacionesBlob = docAnexo.output('blob');
+  const anexoJustificacionesNombreArchivo = `Anexo_Justificaciones_BOE_Modelo_${modelo}_${slug}.pdf`;
+
+  const resumenSecciones = seccionesRenderizadas.map((s) => ({
+    titulo: s.tituloRecuadro,
+    ordinarias: s.preguntasOrdinarias.length,
+    reservas: s.preguntasReserva.length,
+  }));
+
   return {
     cuadernilloBlob,
     cuadernilloNombreArchivo,
@@ -1398,9 +1767,13 @@ export function generarPaquetePDFOficial(
     plantillaOMRNombreArchivo,
     combinadoBlob,
     combinadoNombreArchivo,
+    anexoJustificacionesBlob,
+    anexoJustificacionesNombreArchivo,
+    paginasAnexoJustificaciones,
     codigoPieAplicado,
     totalOrdinarias,
     totalReservas,
     testsIncluidos,
+    resumenSecciones,
   };
 }

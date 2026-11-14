@@ -36,12 +36,14 @@ import { obtenerUrlBOEParaNorma, renderizarTextoConEnlacesBOE } from '../utils/b
 import { SelectorLeyesEInformaticaModal } from './SelectorLeyesEInformaticaModal';
 import { ConfirmarEvaluacionModal } from './ConfirmarEvaluacionModal';
 import { GestorRecursosArgumentacionPregunta } from './GestorRecursosArgumentacionPregunta';
+import { SubseccionExportacionSimulacroPDF } from './SubseccionExportacionSimulacroPDF';
 
 interface SeccionSimulacroOficialProps {
   bancoExamenes: ExamenCompleto[];
   historialPruebas: ExamenCompleto[];
   almacenDudas: ItemAlmacenDuda[];
   onExamenGuardado: (examen: ExamenCompleto) => void;
+  onGuardarEnBanco?: (examen: ExamenCompleto) => void;
   onGuardarEnAlmacenDudas?: (item: ItemAlmacenDuda) => void;
   onIrAHistorial: () => void;
   onActualizarPreguntaGlobal?: (preguntaActualizada: PreguntaExamen) => void;
@@ -115,6 +117,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
   historialPruebas,
   almacenDudas,
   onExamenGuardado,
+  onGuardarEnBanco,
   onGuardarEnAlmacenDudas,
   onIrAHistorial,
   onActualizarPreguntaGlobal,
@@ -123,6 +126,9 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
   onCambiarCategoriaExamen,
   onExportarExamenPDF,
 }) => {
+  // Pestaña activa dentro de Simulacro Oficial: 1) Simulacro actual en pantalla | 2) Configuración de exportación PDF y plantilla oficial
+  const [pestanaSimulacro, setPestanaSimulacro] = useState<'interactivo' | 'exportar_pdf'>('interactivo');
+
   // Configuración general de la Prueba Unificada
   const [duracionMinutos, setDuracionMinutos] = useState<number>(100);
   const [modalidadCorreccion, setModalidadCorreccion] = useState<'final' | 'paso_a_paso'>('final');
@@ -1663,6 +1669,158 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Cargar en la Pestaña 1 (Simulacro en Pantalla) un cuadernillo ensamblado desde la Pestaña 2 de exportación PDF
+  const handleCargarCuadernilloDesdeExportador = (examenEnsamblado: ExamenCompleto) => {
+    const pregsRaw = examenEnsamblado.preguntas || [];
+    if (pregsRaw.length === 0) return;
+
+    let countP1Ord = 0;
+    let countP1Res = 0;
+    let countP2Ord = 0;
+    let countP2Res = 0;
+
+    const esSoloSupuesto =
+      examenEnsamblado.tipo === 'supuesto' &&
+      !pregsRaw.some((p: any) => p.bloqueSimulacro?.startsWith('parte1_')) &&
+      pregsRaw.length <= 30;
+
+    const extendidas: PreguntaSimulacroExtendida[] = pregsRaw.map((p: any, idx) => {
+      let bloque: PreguntaSimulacroExtendida['bloqueSimulacro'] = p.bloqueSimulacro;
+      if (!bloque) {
+        if (esSoloSupuesto) {
+          bloque = p.esReserva ? 'parte2_reserva' : 'parte2_ordinaria';
+        } else {
+          bloque = p.esReserva ? 'parte1_reserva' : 'parte1_ordinaria';
+        }
+      }
+
+      let numeroEnBloque = 1;
+      let codigoInedita = p.codigoInedita;
+      if (bloque === 'parte1_ordinaria') {
+        countP1Ord++;
+        numeroEnBloque = countP1Ord;
+        codigoInedita = codigoInedita || `P1-${String(numeroEnBloque).padStart(2, '0')}`;
+      } else if (bloque === 'parte1_reserva') {
+        countP1Res++;
+        numeroEnBloque = countP1Res;
+        codigoInedita = codigoInedita || `P1-RES-${numeroEnBloque}`;
+      } else if (bloque === 'parte2_ordinaria') {
+        countP2Ord++;
+        numeroEnBloque = countP2Ord;
+        codigoInedita = codigoInedita || `SUP-${String(numeroEnBloque).padStart(2, '0')}`;
+      } else {
+        countP2Res++;
+        numeroEnBloque = countP2Res;
+        codigoInedita = codigoInedita || `SUP-RES-${numeroEnBloque}`;
+      }
+
+      return {
+        ...p,
+        id: idx + 1,
+        esReserva: bloque === 'parte1_reserva' || bloque === 'parte2_reserva',
+        bloqueSimulacro: bloque,
+        numeroEnBloque,
+        codigoInedita,
+      };
+    });
+
+    const duracionSeguraMin = Math.max(10, Math.min(300, Number(duracionMinutos) || 100));
+    const supMatch =
+      supuestosDisponibles.find((s) =>
+        Boolean(examenEnsamblado.contextoCaso && s.contextoCaso === examenEnsamblado.contextoCaso)
+      ) || null;
+
+    setPreguntasExtendidasActivas(extendidas);
+    setPreguntasAnuladasIndices(new Set());
+    setSupuestoActivoInfo(supMatch);
+    setSimulacroActivo({
+      ...examenEnsamblado,
+      id: `SIMULACRO-OFICIAL-${Date.now()}`,
+      soloHistorial: true,
+      preguntas: extendidas,
+    });
+    setIndicePreguntaActual(0);
+    setRespuestasUsuario({});
+    setPreguntasDudosas(new Set());
+    setSegundosRestantes(duracionSeguraMin * 60);
+    setSegundosInvertidos(0);
+    setRelojPausado(false);
+    setSimulacroFinalizado(false);
+    setPreguntaModalJustificacion(null);
+    setPestanaSimulacro('interactivo');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Barra superior de pestañas para alternar entre las dos partes de Simulacro Oficial
+  const barraPestanasSimulacro = (
+    <div className="bg-slate-100/95 dark:bg-slate-800/95 p-2 rounded-2xl border-2 border-indigo-200 dark:border-slate-700 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+        <button
+          type="button"
+          onClick={() => setPestanaSimulacro('interactivo')}
+          className={`py-2.5 px-4 rounded-xl text-xs sm:text-[13px] font-black transition-all flex items-center justify-center gap-2.5 cursor-pointer border-2 ${
+            pestanaSimulacro === 'interactivo'
+              ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border-indigo-400 dark:border-indigo-600 shadow-sm ring-2 ring-indigo-500/15'
+              : 'bg-transparent border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-slate-700/60'
+          }`}
+        >
+          <i className="fa-solid fa-landmark-flag text-indigo-600 dark:text-indigo-400 text-sm"></i>
+          <span>1. Simulacro Oficial en Pantalla (70+20)</span>
+          {simulacroActivo && (
+            <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+              {simulacroFinalizado ? 'Finalizado' : 'En curso'}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPestanaSimulacro('exportar_pdf')}
+          className={`py-2.5 px-4 rounded-xl text-xs sm:text-[13px] font-black transition-all flex items-center justify-center gap-2.5 cursor-pointer border-2 ${
+            pestanaSimulacro === 'exportar_pdf'
+              ? 'bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-300 border-rose-400 dark:border-rose-600 shadow-sm ring-2 ring-rose-500/15'
+              : 'bg-transparent border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-slate-700/60'
+          }`}
+        >
+          <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400 text-sm"></i>
+          <span>2. Configurar Exportación PDF y Plantilla Oficial</span>
+          <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
+            CPS/INAP + OMR
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // PESTAÑA 2: CONFIGURACIÓN DE EXPORTACIÓN PDF OFICIAL Y PLANTILLA DE EXAMEN
+  // ============================================================================
+  if (pestanaSimulacro === 'exportar_pdf') {
+    return (
+      <div className="space-y-5">
+        {barraPestanasSimulacro}
+        <SubseccionExportacionSimulacroPDF
+          bancoExamenes={bancoExamenes}
+          historialPruebas={historialPruebas}
+          testsCatalogo={testsOficialesCatalogo}
+          supuestosCatalogo={supuestosDisponibles}
+          gruposMaterias={gruposMaterias}
+          reservasPoolGlobal={reservasPoolGlobal}
+          todasLasPreguntasUnicas={todasLasPreguntasUnicas}
+          simulacroActivoEnPantalla={simulacroActivo}
+          onGuardarExamenEnBanco={(ex) => {
+            if (onGuardarEnBanco) {
+              onGuardarEnBanco(ex);
+            } else {
+              onExamenGuardado({ ...ex, soloHistorial: false });
+            }
+          }}
+          onCargarExamenEnPantalla={handleCargarCuadernilloDesdeExportador}
+        />
+      </div>
+    );
+  }
+
   // ============================================================================
   // VISTA DE EJECUCIÓN CUANDO EL SIMULACRO OFICIAL ESTÁ ACTIVO
   // ============================================================================
@@ -1718,6 +1876,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
 
     return (
       <div className="space-y-5">
+        {barraPestanasSimulacro}
         {/* BARRA SUPERIOR DE CONTROL DEL SIMULACRO OFICIAL UNIFICADO */}
         <div className="bg-indigo-50/90 dark:bg-indigo-950/40 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -2654,6 +2813,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
   // ============================================================================
   return (
     <div className="space-y-6">
+      {barraPestanasSimulacro}
       {/* CABECERA PRINCIPAL DE SIMULACRO OFICIAL */}
       <div className="bg-linear-to-r from-indigo-50/90 via-white to-amber-50/60 dark:from-indigo-950/40 dark:via-slate-800 dark:to-amber-950/25 border-2 border-indigo-200/90 dark:border-indigo-900/70 rounded-2xl p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">
