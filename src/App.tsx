@@ -1600,10 +1600,10 @@ export default function App() {
                     type="button"
                     onClick={() => setMostrarModalVersion(true)}
                     className="text-[9px] sm:text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 font-mono inline-flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                    title="Ver novedades y últimos cambios de la Versión 3.5"
+                    title="Ver novedades y últimos cambios de la Versión 3.6"
                   >
                     <i className="fa-solid fa-sparkles text-[8px] text-amber-300"></i>
-                    <span>v3.5 · Novedades</span>
+                    <span>v3.6 · Novedades</span>
                   </button>
                   <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-mono flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -1632,7 +1632,7 @@ export default function App() {
                     className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
                   >
                     <i className="fa-solid fa-clock-rotate-left text-[8.5px]"></i>
-                    <span>Actualización v3.5 (Simulacro Oficial en 2 pestañas + Configurador de Exportación PDF, Pack Modelo A/B y Anexo BOE)</span>
+                    <span>Actualización v3.6 (Cabecera unificada en 1 cuadro + Pregunta ampliada + Previsualización en vivo del Cuadernillo PDF)</span>
                   </button>
                 </p>
               </div>
@@ -1644,10 +1644,10 @@ export default function App() {
                 type="button"
                 onClick={() => setMostrarModalVersion(true)}
                 className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                title="Notas de la versión 3.5 y últimos cambios implementados"
+                title="Notas de la versión 3.6 y últimos cambios implementados"
               >
                 <i className="fa-solid fa-code-branch text-emerald-600 dark:text-emerald-400 text-[11px]"></i>
-                <span className="hidden sm:inline">Versión 3.5</span>
+                <span className="hidden sm:inline">Versión 3.6</span>
               </button>
 
               <button
@@ -3463,7 +3463,7 @@ export default function App() {
         onClose={() => setExamenParaExportarPDF(null)}
       />
 
-      {/* MODAL DE VERSIÓN 3.5 Y ÚLTIMOS CAMBIOS */}
+      {/* MODAL DE VERSIÓN 3.6 Y ÚLTIMOS CAMBIOS */}
       {mostrarModalVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border-2 border-slate-300 dark:border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -3475,10 +3475,10 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      Notas de Versión v3.5.0
+                      Notas de Versión v3.6.0
                     </h3>
-                    <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700">
-                      Simulacro en 2 Pestañas + Estudio de Impresión Oficial
+                    <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                      Cabecera Unificada + Vista Previa Cuadernillo PDF
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -3496,15 +3496,25 @@ export default function App() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-indigo-50/90 dark:bg-indigo-950/40 border-2 border-indigo-300 dark:border-indigo-800/80 space-y-1.5">
-                <div className="font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
-                  <i className="fa-solid fa-landmark-flag text-indigo-600"></i>
-                  <span>Novedad v3.5.0 · Simulacro Oficial Dividido en 2 Pestañas + Funciones Extra de Impresión</span>
+              <div className="p-3.5 rounded-2xl bg-emerald-50/95 dark:bg-emerald-950/45 border-2 border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
+                <div className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                  <i className="fa-solid fa-book-open-reader text-emerald-600"></i>
+                  <span>Novedad v3.6.0 · Cabecera Unificada en 1 Cuadro, Progreso Diario Cerrado y Vista Previa PDF</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • <strong>División de «Simulacro Oficial» en 2 pestañas</strong>: <strong>1. Simulacro Oficial en Pantalla (70+20)</strong> (mantenida íntegramente sin modificaciones) y <strong>2. Configurar Exportación PDF y Plantilla Oficial</strong>.<br />
-                  • <strong>Configurador completo de cuadernillos en papel</strong>: Permite ensamblar 1.ª Parte (test del catálogo con filtro <em>Ocultar ya descargados</em>, sorteo por Leyes/Informática, simulacro activo o solo supuesto) + <strong>Supuesto I y Supuesto II opcional en el mismo cuadernillo</strong>, mostrando siempre el encabezado de tests preparados y descargados sin iniciar descargas automáticas.<br />
-                  • <strong>Funciones adicionales incorporadas</strong>: <strong>Portada Oficial de Instrucciones del Tribunal CPS/INAP</strong> (tiempos, penalización <em>A − E/3</em> y normas de marcado), <strong>Anexo Comentado de Corrección y Fundamentación BOE</strong> (integrado o en PDF independiente), <strong>Barajado determinista de preguntas</strong>, <strong>Pack Doble Modelo A + Modelo B (barajado)</strong> en 1 clic, cálculo de folios A4 a doble cara y guardado del cuadernillo en el <strong>Banco de Exámenes</strong> para pasar respuestas del papel a la app y autocorregir PD/PT.
+                  • <strong>Unificación superior en un único cuadro compacto</strong>: Al realizar cualquier test, el sello oficial del BOE y subrayador, el título y controles del cronómetro/exportación y la matriz completa de <strong>preguntas ordinarias + preguntas de reserva en línea</strong> quedan integrados en un solo cuadro compacto para ampliar el protagonismo y espacio del enunciado y las opciones.<br />
+                  • <strong>Progreso Temático Diario cerrado por defecto</strong>: Aparece siempre contraído al iniciar la aplicación para despejar el área de estudio y puede desplegarse con un clic cuando se desee consultar.<br />
+                  • <strong>Previsualización interactiva en vivo del Cuadernillo PDF</strong>: Incorporado visor A4 de alta nitidez (sin descargas automáticas) tanto en la ventana de descarga PDF como en la pestaña 2 de <em>Simulacro Oficial</em>, con paginación, vista en cascada, zoom, pantalla ampliada y conmutador entre <em>Cuadernillo Examen</em>, <em>Hoja OMR en blanco</em>, <em>Todo en 1 PDF</em> y <em>Anexo BOE</em>.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-indigo-50/90 dark:bg-indigo-950/40 border border-indigo-300 dark:border-indigo-800/80 space-y-1.5">
+                <div className="font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
+                  <i className="fa-solid fa-landmark-flag text-indigo-600"></i>
+                  <span>Versión 3.5 · Simulacro Oficial en 2 Pestañas + Estudio de Impresión Oficial</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  • División de <strong>Simulacro Oficial</strong> en 2 pestañas (<em>1. Simulacro en Pantalla</em> y <em>2. Configurar Exportación PDF y Plantilla Oficial</em>), con Portada Oficial del Tribunal CPS/INAP, Anexo Comentado BOE, Barajado de preguntas, Pack Doble Modelo A + Modelo B y guardado en Banco.
                 </p>
               </div>
 
@@ -3514,30 +3524,17 @@ export default function App() {
                   <span>Versión 3.4 · Exportación PDF CPS/INAP Bajo Demanda y Hoja OMR en Blanco</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • <strong>Apertura sin descarga automática</strong> y <strong>encabezado de tests descargados para realizar</strong> con estado pendiente/realizado.<br />
-                  • <strong>Formato oficial CPS/INAP + Hoja OMR verde en blanco</strong> sin datos personales ni marcas.
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
-                <div className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
-                  <i className="fa-solid fa-check-double text-emerald-600"></i>
-                  <span>Versión 3.3 · Marcado Limpio de Respuestas, Tamaño Fijo y Diferenciación de Cuadros</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • <strong>Eliminada la información legal duplicada al responder</strong> y <strong>altura invariable en la zona de preguntas</strong> para mantener <strong>Anterior / Justificación / Siguiente</strong> fijos.<br />
-                  • <strong>Tonos suaves + visado verde (✓) y aspa roja (✗)</strong> y mayor diferenciación cromática entre cuadros.
+                  • <strong>Apertura sin descarga automática</strong>, <strong>encabezado de tests descargados para realizar</strong> y <strong>Hoja OMR verde en blanco</strong> sin datos personales ni marcas.
                 </p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-teal-50/80 dark:bg-teal-950/35 border border-teal-300 dark:border-teal-800/80 space-y-1.5">
                 <div className="font-black text-teal-900 dark:text-teal-200 flex items-center gap-2">
                   <i className="fa-solid fa-scale-balanced text-teal-600"></i>
-                  <span>Versión 3.2 · Ampliación de la Base de Datos de Legislación y Ajustes en Vistas</span>
+                  <span>Versiones 3.2–3.3 · Marcado Limpio sin Saltos, RD 366/2007, IV Convenio y RD 951/2005</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • Incorporados el <strong>Real Decreto 366/2007</strong>, el <strong>IV Convenio Único para el Personal Laboral de la AGE</strong> y el <strong>Real Decreto 951/2005</strong>.<br />
-                  • <strong>Nombres de test multilínea</strong> y <strong>edición de respuestas centralizada en el Banco de Test</strong> con recálculo automático en Historial.
+                  • Altura fija en preguntas, tonos suaves con visado verde (✓) y aspa roja (✗), nombres multilínea, edición de claves centralizada en el Banco y ampliación de legislación BOE.
                 </p>
               </div>
 
@@ -3554,7 +3551,7 @@ export default function App() {
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[11px] font-mono text-slate-400">
-                Versión 3.5.0 · Simulador C1 AGE & Comunidad de Madrid
+                Versión 3.6.0 · Simulador C1 AGE & Comunidad de Madrid
               </span>
               <button
                 type="button"

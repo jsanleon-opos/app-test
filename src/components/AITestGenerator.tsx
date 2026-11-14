@@ -1072,43 +1072,45 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Sello de Garantía y Fuente Oficial Exclusiva BOE */}
-      <div className="bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-indigo-900/60 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 flex items-center justify-center text-lg shrink-0 shadow-2xs">
-            <i className="fa-solid fa-scale-balanced"></i>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                Fuente Oficial Exclusiva: Boletín Oficial del Estado
-              </span>
-              <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
-                www.boe.es
-              </span>
+    <div className={examenActivo ? 'space-y-3' : 'space-y-6'}>
+      {/* Sello de Garantía y Fuente Oficial Exclusiva BOE (en configuración; durante el test se integra en el cuadro único superior) */}
+      {!examenActivo && (
+        <div className="bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-indigo-900/60 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 flex items-center justify-center text-lg shrink-0 shadow-2xs">
+              <i className="fa-solid fa-scale-balanced"></i>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Todas las preguntas, supuestos y soluciones están referenciadas con enlace canónico al texto consolidado vigente del BOE.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                  Fuente Oficial Exclusiva: Boletín Oficial del Estado
+                </span>
+                <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
+                  www.boe.es
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Todas las preguntas, supuestos y soluciones están referenciadas con enlace canónico al texto consolidado vigente del BOE.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-[10px] text-slate-400 hidden lg:inline">
+              💡 <strong>Subrayador activo:</strong> Selecciona cualquier texto para resaltar o añadir notas.
+            </span>
+            <a
+              href="https://www.boe.es"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+            >
+              <span>Portal BOE</span>
+              <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+            </a>
           </div>
         </div>
-
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-[10px] text-slate-400 hidden lg:inline">
-            💡 <strong>Subrayador activo:</strong> Selecciona cualquier texto para resaltar o añadir notas.
-          </span>
-          <a
-            href="https://www.boe.es"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
-          >
-            <span>Portal BOE</span>
-            <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
-          </a>
-        </div>
-      </div>
+      )}
 
       {/* Toast Notification Banner */}
       {toastAviso && (
@@ -1728,355 +1730,433 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
 
       {/* ACTIVE TEST RUNNER */}
       {examenActivo && preguntaActual && (
-        <div className="space-y-4">
-          {/* Header Bar with Action Controls */}
-          <div className="bg-indigo-50/90 dark:bg-indigo-950/40 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span
-                  className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border font-mono ${
-                    examenActivo.tipo === 'supuesto'
-                      ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
-                      : 'bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300'
-                  }`}
-                >
-                  {examenActivo.tipo === 'supuesto' ? 'Supuesto Práctico' : 'Test Normativo'}
-                </span>
-                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">
-                  {examenActivo.ambito}
-                </span>
-                <span className="text-[9px] font-mono font-bold text-slate-400">
-                  Pregunta {preguntaActualIdx + 1} de {examenActivo.preguntas.length}
-                </span>
-                {anotaciones.length > 0 && (
-                  <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
-                    <i className="fa-solid fa-highlighter text-[9px]"></i>
-                    {anotaciones.length} resaltado{anotaciones.length === 1 ? '' : 's'}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <h2 className="text-sm font-black text-slate-900 dark:text-white truncate">
-                  {examenActivo.titulo}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNuevoTituloExamen(examenActivo.titulo);
-                    setMostrarModalRenombrar(true);
-                  }}
-                  className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs transition-colors cursor-pointer"
-                  title="Renombrar este examen"
-                >
-                  <i className="fa-solid fa-pen-to-square"></i>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              {/* Selector Rápido de Modalidad: Paso a paso vs Al final */}
-              <div className="flex items-center bg-slate-100 dark:bg-slate-700/60 p-0.5 rounded-xl border border-slate-200 dark:border-slate-600">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModoCorreccion('paso_a_paso');
-                    setModoRealizacion('interactivo');
-                  }}
-                  className={`py-1 px-2.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    modoCorreccion === 'paso_a_paso'
-                      ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-2xs ring-1 ring-indigo-400/40'
-                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                  }`}
-                  title="Paso a paso: corrección y cita BOE inmediata al responder cada pregunta"
-                >
-                  <i className="fa-solid fa-shoe-prints text-amber-500 text-[9px]"></i>
-                  <span>Paso a paso</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModoCorreccion('al_final');
-                    setModoRealizacion('examen');
-                    if (tiempoRestanteSegundos <= 0) {
-                      setTiempoRestanteSegundos(examenActivo.preguntas.length * 75);
-                    }
-                  }}
-                  className={`py-1 px-2.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    modoCorreccion === 'al_final'
-                      ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-2xs ring-1 ring-indigo-400/40'
-                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                  }`}
-                  title="Al final: responder todo sin ver respuestas ni explicaciones y evaluar en conjunto al terminar"
-                >
-                  <i className="fa-solid fa-flag-checkered text-emerald-500 text-[9px]"></i>
-                  <span>Al final</span>
-                </button>
-              </div>
-
-              {modoCorreccion === 'al_final' && !examenFinalizado && (
-                <>
-                  <button
-                    type="button"
-                    onClick={toggleAutoAvance}
-                    className={`py-1 px-2.5 rounded-xl text-[10px] font-bold border transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                      autoAvanceAlFinal
-                        ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-white'
+        <div className="space-y-3">
+          {/* CUADRO ÚNICO COMPACTO UNIFICADO: Fuente BOE + Subrayador + Cabecera y Controles + Matriz de Preguntas (Ordinarias y Reserva) */}
+          <div className="bg-indigo-50/90 dark:bg-slate-800 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl px-3.5 py-2.5 shadow-sm space-y-2">
+            {/* Fila 1: Identificación del test, sello BOE/subrayador y botonera de control */}
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className={`text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded border font-mono ${
+                      examenActivo.tipo === 'supuesto'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+                        : 'bg-white text-indigo-800 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-700'
                     }`}
-                    title="Avanzar automáticamente a la siguiente pregunta al marcar una opción"
                   >
-                    <i className={`fa-solid fa-forward-step ${autoAvanceAlFinal ? 'text-amber-500 animate-pulse' : 'text-slate-400'}`}></i>
-                    <span>Auto-avance: <strong>{autoAvanceAlFinal ? 'SÍ' : 'NO'}</strong></span>
-                  </button>
+                    {examenActivo.tipo === 'supuesto' ? 'Supuesto Práctico' : 'Test Normativo'}
+                  </span>
+                  <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-mono">
+                    {examenActivo.ambito}
+                  </span>
+                  <span className="text-[9.5px] font-mono font-bold text-slate-600 dark:text-slate-300">
+                    Preg. {preguntaActualIdx + 1}/{examenActivo.preguntas.length} · {respondidasOrdinarias}/{preguntasOrdinarias.length} cont.
+                  </span>
 
+                  <a
+                    href="https://www.boe.es"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-50/90 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:underline inline-flex items-center gap-1"
+                    title="Fuente Oficial Exclusiva: Boletín Oficial del Estado (texto consolidado vigente en www.boe.es)"
+                  >
+                    <i className="fa-solid fa-scale-balanced text-[8px]"></i>
+                    <span>BOE Oficial</span>
+                    <i className="fa-solid fa-arrow-up-right-from-square text-[7px] opacity-75"></i>
+                  </a>
+
+                  <span
+                    className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 hidden md:inline-flex items-center gap-1"
+                    title="Selecciona cualquier texto del enunciado, opciones o supuesto para resaltar o añadir notas"
+                  >
+                    <i className="fa-solid fa-highlighter text-[8px] text-amber-500"></i>
+                    <span>Subrayador activo{anotaciones.length > 0 ? ` (${anotaciones.length})` : ''}</span>
+                  </span>
+
+                  <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">|</span>
+
+                  <div className="flex items-center gap-1 min-w-0 max-w-full">
+                    <h2
+                      className="text-xs sm:text-[13px] font-black text-slate-900 dark:text-white truncate max-w-[260px] sm:max-w-[420px] 2xl:max-w-[560px]"
+                      title={examenActivo.titulo}
+                    >
+                      {examenActivo.titulo}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNuevoTituloExamen(examenActivo.titulo);
+                        setMostrarModalRenombrar(true);
+                      }}
+                      className="p-0.5 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 text-[11px] transition-colors cursor-pointer shrink-0"
+                      title="Renombrar este examen"
+                    >
+                      <i className="fa-solid fa-pen-to-square"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Controles compactos en línea */}
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                {/* Selector Rápido de Modalidad: Paso a paso vs Al final */}
+                <div className="flex items-center bg-white/90 dark:bg-slate-900/70 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
                   <button
                     type="button"
-                    onClick={solicitarEvaluarExamen}
-                    className="py-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 cursor-pointer animate-in fade-in"
-                    title="Evaluar y corregir en conjunto todas las preguntas"
+                    onClick={() => {
+                      setModoCorreccion('paso_a_paso');
+                      setModoRealizacion('interactivo');
+                    }}
+                    className={`py-0.5 px-2 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                      modoCorreccion === 'paso_a_paso'
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Paso a paso: corrección inmediata al responder cada pregunta"
                   >
-                    <i className="fa-solid fa-circle-check text-[10px]"></i>
-                    <span>Evaluar todo ({Object.keys(respuestasUsuario).length}/{examenActivo.preguntas.length})</span>
+                    <i className="fa-solid fa-shoe-prints text-amber-400 text-[8.5px]"></i>
+                    <span>Paso a paso</span>
                   </button>
-                </>
-              )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModoCorreccion('al_final');
+                      setModoRealizacion('examen');
+                      if (tiempoRestanteSegundos <= 0) {
+                        setTiempoRestanteSegundos(examenActivo.preguntas.length * 75);
+                      }
+                    }}
+                    className={`py-0.5 px-2 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                      modoCorreccion === 'al_final'
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Al final: responder todo sin ver soluciones y evaluar en conjunto al terminar"
+                  >
+                    <i className="fa-solid fa-flag-checkered text-emerald-400 text-[8.5px]"></i>
+                    <span>Al final</span>
+                  </button>
+                </div>
 
-              {/* CRONÓMETRO ACTIVO EN TODOS LOS TESTS */}
-              <div className="flex items-center gap-1.5">
-                <div
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border font-mono font-black text-xs transition-all ${
-                    isTimerPaused
-                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700'
-                      : tiempoRestanteSegundos < 120
-                      ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
-                      : 'bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'
-                  }`}
-                  title={isTimerPaused ? 'Cronómetro en pausa' : 'Tiempo restante'}
-                >
-                  <i className={`fa-regular fa-clock text-[10px] ${isTimerPaused ? 'text-amber-600' : 'text-indigo-600'}`}></i>
-                  <span>{formatTimer(tiempoRestanteSegundos)}</span>
-                  {isTimerPaused && (
-                    <span className="text-[8px] uppercase tracking-wider px-1 py-0.2 rounded bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-sans font-black">
-                      Pausa
-                    </span>
+                {modoCorreccion === 'al_final' && !examenFinalizado && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleAutoAvance}
+                      className={`py-1 px-2 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer ${
+                        autoAvanceAlFinal
+                          ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                      title="Avanzar automáticamente a la siguiente pregunta al marcar una opción"
+                    >
+                      <i className={`fa-solid fa-forward-step text-[9px] ${autoAvanceAlFinal ? 'text-amber-500' : 'text-slate-400'}`}></i>
+                      <span>Auto: {autoAvanceAlFinal ? 'SÍ' : 'NO'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={solicitarEvaluarExamen}
+                      className="py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10.5px] font-black shadow-2xs flex items-center gap-1 cursor-pointer"
+                      title="Evaluar y corregir en conjunto todas las preguntas"
+                    >
+                      <i className="fa-solid fa-circle-check text-[9.5px]"></i>
+                      <span>Evaluar ({Object.keys(respuestasUsuario).length}/{examenActivo.preguntas.length})</span>
+                    </button>
+                  </>
+                )}
+
+                {/* Cronómetro compacto */}
+                <div className="flex items-center gap-1">
+                  <div
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border font-mono font-black text-[11px] transition-all ${
+                      isTimerPaused
+                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700'
+                        : tiempoRestanteSegundos < 120
+                        ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
+                        : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                    }`}
+                    title={isTimerPaused ? 'Cronómetro en pausa' : 'Tiempo restante'}
+                  >
+                    <i className={`fa-regular fa-clock text-[9.5px] ${isTimerPaused ? 'text-amber-600' : 'text-indigo-600'}`}></i>
+                    <span>{formatTimer(tiempoRestanteSegundos)}</span>
+                  </div>
+
+                  {!examenFinalizado && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsTimerPaused(!isTimerPaused)}
+                        className="py-1 px-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold cursor-pointer flex items-center gap-1"
+                        title={isTimerPaused ? 'Reanudar cronómetro' : 'Pausar cronómetro'}
+                      >
+                        <i className={`fa-solid ${isTimerPaused ? 'fa-play text-emerald-600' : 'fa-pause text-amber-600'} text-[9px]`}></i>
+                        <span className="hidden 2xl:inline">{isTimerPaused ? 'Reanudar' : 'Pausar'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setMostrarModalAjustarTiempo(true)}
+                        className="py-1 px-1.5 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-slate-700 border border-indigo-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-300 rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1"
+                        title="Ajustar tiempo del examen"
+                      >
+                        <i className="fa-solid fa-clock-rotate-left text-[9px]"></i>
+                        <span className="hidden 2xl:inline">Ajustar</span>
+                      </button>
+                    </>
                   )}
                 </div>
 
-                {!examenFinalizado && (
-                  <button
-                    type="button"
-                    onClick={() => setIsTimerPaused(!isTimerPaused)}
-                    className="py-1 px-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                    title={isTimerPaused ? 'Reanudar cronómetro' : 'Pausar cronómetro'}
-                  >
-                    <i className={`fa-solid ${isTimerPaused ? 'fa-play text-emerald-600' : 'fa-pause text-amber-600'} text-[10px]`}></i>
-                    <span className="hidden sm:inline text-[10px]">{isTimerPaused ? 'Reanudar' : 'Pausar'}</span>
-                  </button>
+                <button
+                  onClick={exportarTestAJSON}
+                  className="py-1 px-2 bg-white dark:bg-slate-900 hover:bg-indigo-50 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 rounded-lg text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
+                  title="Exportar test a archivo .json"
+                >
+                  <i className="fa-solid fa-file-code text-indigo-500 text-[10px]"></i>
+                  <span>JSON</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={exportarExamenPDF}
+                  className="py-1 px-2 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-lg text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
+                  title="Previsualizar y exportar examen en PDF oficial + Plantilla OMR en blanco"
+                >
+                  <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400 text-[10px]"></i>
+                  <span>Exportar PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={reiniciarParaRealizarDeNuevo}
+                  className="py-1 px-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 rounded-lg text-[10.5px] font-black flex items-center gap-1 cursor-pointer"
+                  title="Reiniciar este examen desde cero"
+                >
+                  <i className="fa-solid fa-rotate-right text-[9.5px] text-amber-600"></i>
+                  <span>Reiniciar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => resetearExamenCompleto('Examen y progreso reiniciados correctamente.')}
+                  className="py-1 px-2 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-lg text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
+                  title="Cerrar este examen y crear uno nuevo"
+                >
+                  <i className="fa-solid fa-plus text-rose-500 text-[9.5px]"></i>
+                  <span>Nuevo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={cerrarExamenActual}
+                  className="py-1 px-2 bg-white dark:bg-slate-700 hover:bg-slate-200 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-200 rounded-lg text-[10.5px] font-bold cursor-pointer"
+                  title="Salir del examen y volver al generador"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            {/* Aviso compacto integrado si se está revisando un intento anterior o filtros post-evaluación */}
+            {(Boolean(examenActivo.resultado) || examenFinalizado) && (
+              <div className="pt-1.5 border-t border-indigo-200/70 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
+                {Boolean(examenActivo.resultado) && (
+                  <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200">
+                    <i className="fa-solid fa-clock-rotate-left text-amber-600 text-[10px]"></i>
+                    <span>
+                      Resultado registrado:{' '}
+                      <strong>
+                        {Number(examenActivo.resultado?.puntuacionDirecta).toFixed(2)} PD /{' '}
+                        {Number(examenActivo.resultado?.puntuacionTransformada).toFixed(2)} PT
+                      </strong>
+                    </span>
+                  </div>
                 )}
 
-                {!examenFinalizado && (
-                  <button
-                    type="button"
-                    onClick={() => setMostrarModalAjustarTiempo(true)}
-                    className="py-1 px-2 bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                    title="Ajustar o seleccionar tiempo del examen"
-                  >
-                    <i className="fa-solid fa-clock-rotate-left text-[10px]"></i>
-                    <span className="hidden sm:inline text-[10px]">Ajustar</span>
-                  </button>
+                {examenFinalizado && (
+                  <div className="flex items-center gap-1 flex-wrap ml-auto">
+                    <span className="text-[9.5px] font-mono font-bold uppercase text-slate-500 mr-1">
+                      Filtrar:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => cambiarFiltro('todas')}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer ${
+                        filtroPreguntas === 'todas'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      Todas ({examenActivo.preguntas.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cambiarFiltro('acertadas')}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer ${
+                        filtroPreguntas === 'acertadas'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      }`}
+                    >
+                      <i className="fa-solid fa-check text-[8px]"></i>
+                      <span>{examenActivo.resultado?.aciertos ?? 0}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cambiarFiltro('falladas')}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer ${
+                        filtroPreguntas === 'falladas'
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                      }`}
+                    >
+                      <i className="fa-solid fa-xmark text-[8px]"></i>
+                      <span>{examenActivo.resultado?.fallos ?? 0}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cambiarFiltro('blancos')}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer ${
+                        filtroPreguntas === 'blancos'
+                          ? 'bg-slate-700 text-white'
+                          : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      Blancos ({examenActivo.resultado?.blancos ?? 0})
+                    </button>
+                  </div>
                 )}
-              </div>
-
-              {/* BOTÓN CLAVE: EXPORTAR TEST A JSON */}
-              <button
-                onClick={exportarTestAJSON}
-                className="py-1.5 px-3 bg-indigo-50 dark:bg-indigo-900/50 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                title="Descargar archivo .json con el test, texto completo, notas y resaltados"
-              >
-                <i className="fa-solid fa-file-code text-indigo-500"></i>
-                <span>Exportar test a JSON</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={exportarExamenPDF}
-                className="py-1.5 px-3 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                title="Exportar examen en formato PDF oficial + Plantilla de hoja de respuestas en blanco"
-              >
-                <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400"></i>
-                <span>Exportar PDF</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={reiniciarParaRealizarDeNuevo}
-                className="py-1.5 px-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 rounded-xl text-xs font-black shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
-                title="Reiniciar este examen para realizarlo de nuevo desde cero. El nuevo resultado será el considerado en estadísticas y listados."
-              >
-                <i className="fa-solid fa-rotate-right text-[11px] text-amber-600"></i>
-                <span>Reiniciar / Hacer de nuevo</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => resetearExamenCompleto('Examen y progreso reiniciados correctamente.')}
-                className="py-1.5 px-3 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                title="Cerrar este examen y volver al generador para crear un examen nuevo"
-              >
-                <i className="fa-solid fa-plus text-rose-500 text-[10px]"></i>
-                <span>Nuevo examen</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={cerrarExamenActual}
-                className="py-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                title="Salir del examen y volver al generador"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-
-          {/* Banner si el examen ya tenía resultado previo al ser recuperado */}
-          {examenActivo && Boolean(examenActivo.resultado) && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3 bg-amber-100/85 dark:bg-amber-950/45 border-2 border-amber-300 dark:border-amber-700 rounded-xl text-xs">
-              <div className="flex items-center gap-2.5 text-amber-950 dark:text-amber-200">
-                <div className="h-7 w-7 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
-                  <i className="fa-solid fa-clock-rotate-left text-sm"></i>
-                </div>
-                <div>
-                  <span className="font-bold block leading-tight">
-                    {`Mostrando respuestas de realización anterior (${Number(examenActivo.resultado?.puntuacionDirecta).toFixed(2)} PD / ${Number(examenActivo.resultado?.puntuacionTransformada).toFixed(2)} PT).`}
-                  </span>
-                  <span className="text-[11px] text-amber-800 dark:text-amber-300/80 block mt-0.5">
-                    Puedes reiniciar para responderlo de nuevo desde cero. El nuevo resultado será el que conste en los listados y KPIs.
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={reiniciarParaRealizarDeNuevo}
-                className="py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <i className="fa-solid fa-rotate-right text-[10px]"></i>
-                <span>Reiniciar y Realizar de nuevo</span>
-              </button>
-            </div>
-          )}
-
-          {/* Navigator Matrix */}
-          <div className="bg-sky-50/85 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-800 rounded-xl p-3.5 shadow-sm space-y-2.5">
-            {examenFinalizado && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700 pb-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                  Filtro del Test:
-                </span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => cambiarFiltro('todas')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                      filtroPreguntas === 'todas'
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                    }`}
-                  >
-                    Todas ({examenActivo.preguntas.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => cambiarFiltro('acertadas')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      filtroPreguntas === 'acertadas'
-                        ? 'bg-emerald-600 text-white shadow-2xs'
-                        : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                    }`}
-                  >
-                    <i className="fa-solid fa-check text-[9px]"></i>
-                    Acertadas ({examenActivo.resultado?.aciertos ?? 0})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => cambiarFiltro('falladas')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      filtroPreguntas === 'falladas'
-                        ? 'bg-rose-600 text-white shadow-2xs'
-                        : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
-                    }`}
-                  >
-                    <i className="fa-solid fa-xmark text-[9px]"></i>
-                    Falladas ({examenActivo.resultado?.fallos ?? 0})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => cambiarFiltro('blancos')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      filtroPreguntas === 'blancos'
-                        ? 'bg-slate-700 text-white shadow-2xs'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    En Blanco ({examenActivo.resultado?.blancos ?? 0})
-                  </button>
-                </div>
               </div>
             )}
 
-            {/* SECCIÓN NAVEGACIÓN DIFERENCIADA: CUESTIONARIO ORDINARIO Y PREGUNTAS DE RESERVA */}
-            <div className="space-y-4">
-              {/* Sección 1: Cuestionario Ordinario */}
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="h-5 w-5 rounded-md bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
-                      <i className="fa-solid fa-list-ol"></i>
-                    </span>
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                      Cuestionario Ordinario (Preguntas 1 a {preguntasOrdinarias.length})
-                    </span>
-                  </div>
+            {/* Fila 2: Matriz unificada compacta en línea (Cuestionario Ordinario + Preguntas de Reserva sin sub-cuadros) */}
+            <div className="pt-2 border-t border-indigo-200/80 dark:border-slate-700 flex items-center gap-1 flex-wrap">
+              <span className="text-[9.5px] font-mono font-black uppercase text-indigo-800 dark:text-indigo-300 mr-1">
+                Ordinarias:
+              </span>
 
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {respondidasOrdinarias} de {preguntasOrdinarias.length} contestadas
-                    </span>
-                  </div>
-                </div>
+              {preguntasOrdinarias.map((p, oIdx) => {
+                const fullIdx = examenActivo.preguntas.findIndex((item) => item.id === p.id);
+                const idx = fullIdx >= 0 ? fullIdx : oIdx;
+                const isSelected = idx === preguntaActualIdx;
+                const isAnswered = !!respuestasUsuario[idx];
+                const isDoubtful = !!dudosasUsuario[idx];
+                const estado = getEstadoPregunta(idx);
+                const isMatch = indicesFiltrados.includes(idx);
 
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {preguntasOrdinarias.map((p, oIdx) => {
+                let cellClass =
+                  'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700';
+                let icon = null;
+
+                if (p.esAnulada) {
+                  cellClass = isSelected
+                    ? 'border-rose-600 bg-rose-600 text-white font-black ring-2 ring-rose-400'
+                    : 'border-rose-300 bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 font-bold';
+                  icon = <i className="fa-solid fa-ban text-[7px]"></i>;
+                } else if (examenFinalizado) {
+                  if (estado === 'acertada') {
+                    cellClass = isSelected
+                      ? 'border-emerald-600 bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-300'
+                      : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-bold';
+                    icon = <i className="fa-solid fa-check text-[7px]"></i>;
+                  } else if (estado === 'fallada') {
+                    cellClass = isSelected
+                      ? 'border-rose-600 bg-rose-600 text-white font-black shadow-xs ring-2 ring-rose-300'
+                      : 'border-rose-300 bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 font-bold';
+                    icon = <i className="fa-solid fa-xmark text-[7px]"></i>;
+                  } else {
+                    cellClass = isSelected
+                      ? 'border-slate-600 bg-slate-600 text-white font-black'
+                      : 'border-slate-200 bg-slate-100 dark:bg-slate-800 text-slate-400';
+                  }
+
+                  if (!isMatch) {
+                    cellClass += ' opacity-30 hover:opacity-100';
+                  }
+                } else {
+                  if (isSelected) {
+                    cellClass =
+                      'border-indigo-600 bg-indigo-600 text-white font-black shadow-xs ring-2 ring-indigo-300';
+                  } else if (isDoubtful) {
+                    cellClass =
+                      'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 font-bold';
+                  } else if (isAnswered) {
+                    if (modoCorreccion === 'paso_a_paso') {
+                      if (estado === 'acertada') {
+                        cellClass =
+                          'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold';
+                        icon = <i className="fa-solid fa-check text-[7px]"></i>;
+                      } else {
+                        cellClass =
+                          'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold';
+                        icon = <i className="fa-solid fa-xmark text-[7px]"></i>;
+                      }
+                    } else {
+                      cellClass =
+                        'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 font-bold';
+                      icon = <i className="fa-solid fa-check text-[7px] text-indigo-600"></i>;
+                    }
+                  }
+                }
+
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPreguntaActualIdx(idx)}
+                    className={`h-6.5 min-w-6.5 px-1.5 rounded-md border text-[11px] font-mono flex items-center justify-center gap-0.5 shrink-0 transition-all cursor-pointer ${cellClass}`}
+                    title={`Pregunta ${oIdx + 1}${p.esAnulada ? ' (Anulada en plantilla)' : examenFinalizado ? ` (${estado})` : ''}`}
+                  >
+                    <span>{oIdx + 1}</span>
+                    {icon}
+                  </button>
+                );
+              })}
+
+              {preguntasReserva.length > 0 && (
+                <>
+                  <span className="h-4 w-px bg-indigo-300 dark:bg-slate-600 mx-1 hidden sm:inline-block" />
+                  <span
+                    className="text-[9.5px] font-mono font-black uppercase px-1.5 py-0.5 rounded bg-amber-100/90 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 ml-0.5"
+                    title={`Preguntas de Reserva (${reservasActivasCount} en cómputo oficial): sustituyen correlativamente a preguntas anuladas (+1.00 acierto / -0.33 fallo)`}
+                  >
+                    Reserva{reservasActivasCount > 0 ? ` (${reservasActivasCount} act.)` : ''}:
+                  </span>
+
+                  {preguntasReserva.map((p, rIdx) => {
                     const fullIdx = examenActivo.preguntas.findIndex((item) => item.id === p.id);
-                    const idx = fullIdx >= 0 ? fullIdx : oIdx;
+                    const idx = fullIdx >= 0 ? fullIdx : preguntasOrdinarias.length + rIdx;
                     const isSelected = idx === preguntaActualIdx;
                     const isAnswered = !!respuestasUsuario[idx];
                     const isDoubtful = !!dudosasUsuario[idx];
                     const estado = getEstadoPregunta(idx);
                     const isMatch = indicesFiltrados.includes(idx);
+                    const numRes = p.numeroReserva || rIdx + 1;
 
-                    let cellClass = 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700';
+                    let cellClass =
+                      'border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-200 hover:bg-amber-100';
                     let icon = null;
 
                     if (p.esAnulada) {
                       cellClass = isSelected
-                        ? 'border-rose-600 bg-rose-600 text-white font-black ring-2 ring-rose-400'
-                        : 'border-rose-300 bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 font-bold';
-                      icon = <i className="fa-solid fa-ban text-[7px] block"></i>;
+                        ? 'border-rose-600 bg-rose-600 text-white font-black'
+                        : 'border-rose-300 bg-rose-50 text-rose-800 font-bold';
+                      icon = <i className="fa-solid fa-ban text-[7px]"></i>;
                     } else if (examenFinalizado) {
                       if (estado === 'acertada') {
                         cellClass = isSelected
                           ? 'border-emerald-600 bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-300'
                           : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-bold';
-                        icon = <i className="fa-solid fa-check text-[7px] block"></i>;
+                        icon = <i className="fa-solid fa-check text-[7px]"></i>;
                       } else if (estado === 'fallada') {
                         cellClass = isSelected
                           ? 'border-rose-600 bg-rose-600 text-white font-black shadow-xs ring-2 ring-rose-300'
                           : 'border-rose-300 bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 font-bold';
-                        icon = <i className="fa-solid fa-xmark text-[7px] block"></i>;
+                        icon = <i className="fa-solid fa-xmark text-[7px]"></i>;
                       } else {
                         cellClass = isSelected
-                          ? 'border-slate-600 bg-slate-600 text-white font-black'
-                          : 'border-slate-200 bg-slate-100 dark:bg-slate-800 text-slate-400';
+                          ? 'border-amber-600 bg-amber-600 text-white font-black'
+                          : 'border-amber-200 bg-amber-50/60 dark:bg-slate-800 text-amber-800 dark:text-amber-300';
                       }
 
                       if (!isMatch) {
@@ -2084,22 +2164,22 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                       }
                     } else {
                       if (isSelected) {
-                        cellClass = 'border-indigo-600 bg-indigo-600 text-white font-black shadow-xs ring-2 ring-indigo-300';
+                        cellClass =
+                          'border-amber-600 bg-amber-500 text-white font-black shadow-xs ring-2 ring-amber-300';
                       } else if (isDoubtful) {
-                        cellClass = 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 font-bold';
+                        cellClass = 'border-amber-400 bg-amber-100 text-amber-900 font-bold';
                       } else if (isAnswered) {
                         if (modoCorreccion === 'paso_a_paso') {
                           if (estado === 'acertada') {
-                            cellClass = 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold';
-                            icon = <i className="fa-solid fa-check text-[7px] block"></i>;
+                            cellClass = 'border-emerald-500 bg-emerald-50 text-emerald-900 font-bold';
+                            icon = <i className="fa-solid fa-check text-[7px]"></i>;
                           } else {
-                            cellClass = 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold';
-                            icon = <i className="fa-solid fa-xmark text-[7px] block"></i>;
+                            cellClass = 'border-rose-400 bg-rose-50 text-rose-900 font-bold';
+                            icon = <i className="fa-solid fa-xmark text-[7px]"></i>;
                           }
                         } else {
-                          // Modo al final: marcada como contestada sin desvelar acierto o fallo
-                          cellClass = 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 font-bold';
-                          icon = <i className="fa-solid fa-check text-[7px] block text-indigo-600"></i>;
+                          cellClass = 'border-amber-400 bg-amber-100 text-amber-950 font-bold';
+                          icon = <i className="fa-solid fa-check text-[7px] text-amber-700"></i>;
                         }
                       }
                     }
@@ -2109,116 +2189,20 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                         key={p.id}
                         type="button"
                         onClick={() => setPreguntaActualIdx(idx)}
-                        className={`h-7.5 min-w-7.5 px-1.5 rounded-lg border text-xs font-mono flex flex-col items-center justify-center shrink-0 transition-all cursor-pointer ${cellClass}`}
-                        title={`Pregunta ${oIdx + 1}${p.esAnulada ? ' (Anulada en plantilla)' : examenFinalizado ? ` (${estado})` : ''}`}
+                        className={`h-6.5 px-2 rounded-md border text-[11px] font-mono font-black flex items-center justify-center gap-1 shrink-0 transition-all cursor-pointer ${cellClass}`}
+                        title={`Pregunta de Reserva #${numRes}${
+                          p.activaEnEvaluacion
+                            ? ` (Activa: sustituye a #${p.sustituyeAPreguntaId})`
+                            : ' (Sustituye correlativamente a preguntas anuladas)'
+                        }`}
                       >
-                        <span>{oIdx + 1}</span>
+                        <i className="fa-solid fa-star text-[7.5px] opacity-75"></i>
+                        <span>R{numRes}</span>
                         {icon}
                       </button>
                     );
                   })}
-                </div>
-              </div>
-
-              {/* Sección 2: Preguntas de Reserva (diferenciada como sección específica) */}
-              {preguntasReserva.length > 0 && (
-                <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/60 dark:border-amber-800/40 pb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="h-5 w-5 rounded-md bg-amber-500 text-white flex items-center justify-center text-[10px] shadow-2xs">
-                        <i className="fa-solid fa-star"></i>
-                      </span>
-                      <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-                        Preguntas de Reserva (Reserva 1 a {preguntasReserva.length})
-                      </span>
-                      <span className="text-[8.5px] font-bold px-1.5 py-0.2 rounded bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 font-mono">
-                        {reservasActivasCount} en cómputo oficial
-                      </span>
-                    </div>
-
-                    <span className="text-[9.5px] text-amber-800/90 dark:text-amber-300 font-medium">
-                      Sustituyen correlativamente a preguntas anuladas (+1.00 acierto / -0.33 fallo)
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {preguntasReserva.map((p, rIdx) => {
-                      const fullIdx = examenActivo.preguntas.findIndex((item) => item.id === p.id);
-                      const idx = fullIdx >= 0 ? fullIdx : preguntasOrdinarias.length + rIdx;
-                      const isSelected = idx === preguntaActualIdx;
-                      const isAnswered = !!respuestasUsuario[idx];
-                      const isDoubtful = !!dudosasUsuario[idx];
-                      const estado = getEstadoPregunta(idx);
-                      const isMatch = indicesFiltrados.includes(idx);
-                      const numRes = p.numeroReserva || rIdx + 1;
-
-                      let cellClass = 'border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100';
-                      let icon = null;
-
-                      if (p.esAnulada) {
-                        cellClass = isSelected
-                          ? 'border-rose-600 bg-rose-600 text-white font-black'
-                          : 'border-rose-300 bg-rose-50 text-rose-800 font-bold';
-                        icon = <i className="fa-solid fa-ban text-[7px] block"></i>;
-                      } else if (examenFinalizado) {
-                        if (estado === 'acertada') {
-                          cellClass = isSelected
-                            ? 'border-emerald-600 bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-300'
-                            : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-bold';
-                          icon = <i className="fa-solid fa-check text-[7px] block"></i>;
-                        } else if (estado === 'fallada') {
-                          cellClass = isSelected
-                            ? 'border-rose-600 bg-rose-600 text-white font-black shadow-xs ring-2 ring-rose-300'
-                            : 'border-rose-300 bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 font-bold';
-                          icon = <i className="fa-solid fa-xmark text-[7px] block"></i>;
-                        } else {
-                          cellClass = isSelected
-                            ? 'border-amber-600 bg-amber-600 text-white font-black'
-                            : 'border-amber-200 bg-amber-50/60 dark:bg-slate-800 text-amber-800 dark:text-amber-300';
-                        }
-
-                        if (!isMatch) {
-                          cellClass += ' opacity-30 hover:opacity-100';
-                        }
-                      } else {
-                        if (isSelected) {
-                          cellClass = 'border-amber-600 bg-amber-500 text-white font-black shadow-xs ring-2 ring-amber-300';
-                        } else if (isDoubtful) {
-                          cellClass = 'border-amber-400 bg-amber-100 text-amber-900 font-bold';
-                        } else if (isAnswered) {
-                          if (modoCorreccion === 'paso_a_paso') {
-                            if (estado === 'acertada') {
-                              cellClass = 'border-emerald-500 bg-emerald-50 text-emerald-900 font-bold';
-                              icon = <i className="fa-solid fa-check text-[7px] block"></i>;
-                            } else {
-                              cellClass = 'border-rose-400 bg-rose-50 text-rose-900 font-bold';
-                              icon = <i className="fa-solid fa-xmark text-[7px] block"></i>;
-                            }
-                          } else {
-                            cellClass = 'border-amber-400 bg-amber-100 text-amber-950 font-bold';
-                            icon = <i className="fa-solid fa-check text-[7px] block text-amber-700"></i>;
-                          }
-                        }
-                      }
-
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => setPreguntaActualIdx(idx)}
-                          className={`h-7.5 px-2.5 rounded-lg border text-xs font-mono font-black flex items-center justify-center gap-1 shrink-0 transition-all cursor-pointer ${cellClass}`}
-                          title={`Pregunta de Reserva #${numRes}${
-                            p.activaEnEvaluacion ? ` (Activa: sustituye a #${p.sustituyeAPreguntaId})` : ' (Inactiva)'
-                          }`}
-                        >
-                          <i className="fa-solid fa-star text-[8px] opacity-70"></i>
-                          <span>R{numRes}</span>
-                          {icon}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -2248,9 +2232,10 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
             </div>
           )}
 
-          {/* Question Box (with Subrayador & Anotaciones) */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4">
-            <div className="space-y-2">
+          {/* Question Box ampliado (mayor protagonismo visual y altura estable al responder) */}
+          <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-7 shadow-md min-h-[430px] sm:min-h-[465px] flex flex-col justify-between gap-5">
+            <div className="space-y-4">
+              <div className="space-y-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] font-mono font-black uppercase text-indigo-600 dark:text-indigo-400 block">
@@ -2412,7 +2397,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                   <span>Pregunta de reserva que no computa en la nota final al no haber suficientes preguntas ordinarias anuladas que cubrir.</span>
                 </div>
               )}
-              <div className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug">
+              <div className="text-[15px] sm:text-[17px] font-bold text-slate-900 dark:text-white leading-relaxed pt-1">
                 <AnnotatedPlainTextViewer
                   text={preguntaActual.enunciado}
                   seccion="enunciado"
@@ -2423,7 +2408,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                   onEliminarAnotacion={handleEliminarAnotacion}
                 />
               </div>
-            </div>
+              </div>
 
             {/* Options List (altura fija e invariable al responder; sin duplicar texto legal ni bloque BOE) */}
             {(() => {
@@ -2431,7 +2416,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
 
               return (
                 <>
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     {preguntaActual.opciones.map((opc) => {
                       const isSelected = respuestaActual === opc.id;
 
@@ -2491,14 +2476,14 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                         <div
                           key={opc.id}
                           onClick={() => seleccionarOpcion(opc.id as any)}
-                          className={`p-3.5 rounded-xl border text-xs sm:text-sm font-medium cursor-pointer select-none transition-colors flex items-start gap-3 ${optClass}`}
+                          className={`p-3.5 sm:p-4 rounded-xl border text-[13.5px] sm:text-[15px] font-medium cursor-pointer select-none transition-colors flex items-start gap-3.5 ${optClass}`}
                         >
                           <span
-                            className={`h-6 w-6 rounded-lg flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5 ${badgeClass}`}
+                            className={`h-6.5 w-6.5 rounded-lg flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5 ${badgeClass}`}
                           >
                             {opc.id}
                           </span>
-                          <div className="flex-1 leading-snug py-0.5">
+                          <div className="flex-1 leading-relaxed py-0.5">
                             <AnnotatedPlainTextViewer
                               text={opc.texto}
                               seccion="opcion"
@@ -2510,7 +2495,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                               onEliminarAnotacion={handleEliminarAnotacion}
                             />
                           </div>
-                          <span className="h-6 w-6 shrink-0 mt-0.5 flex items-center justify-center">
+                          <span className="h-6.5 w-6.5 shrink-0 mt-0.5 flex items-center justify-center">
                             {rightIndicator}
                           </span>
                         </div>
@@ -2555,6 +2540,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                 </>
               );
             })()}
+            </div>
 
             {/* Bottom Controls */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">

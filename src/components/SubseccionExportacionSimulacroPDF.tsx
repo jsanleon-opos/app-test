@@ -29,6 +29,10 @@ import {
   RegistroTestDescargadoPDF,
   ResultadoGeneracionPDFOficial,
 } from '../utils/officialPdfExporter';
+import {
+  TipoDocumentoPrevisualizado,
+  VisorPrevisualizacionPdfOficial,
+} from './VisorPrevisualizacionPdfOficial';
 
 export interface GrupoMateriaExportable {
   nombre: string;
@@ -153,6 +157,9 @@ export const SubseccionExportacionSimulacroPDF: React.FC<
   const [incluirSoluciones, setIncluirSoluciones] = useState<boolean>(true);
   const [incluirPortadaTribunal, setIncluirPortadaTribunal] = useState<boolean>(true);
   const [duracionPortadaMin, setDuracionPortadaMin] = useState<number>(100);
+  const [mostrarPrevisualizacionPDF, setMostrarPrevisualizacionPDF] = useState<boolean>(true);
+  const [docPrevisualizado, setDocPrevisualizado] =
+    useState<TipoDocumentoPrevisualizado>('cuadernillo');
   const [incluirAnexoBOE, setIncluirAnexoBOE] = useState<boolean>(false);
   const [barajarOrdenPreguntas, setBarajarOrdenPreguntas] = useState<boolean>(false);
   const [semillaBarajadoPDF, setSemillaBarajadoPDF] = useState<number>(402619);
@@ -1468,13 +1475,32 @@ export const SubseccionExportacionSimulacroPDF: React.FC<
         {/* COLUMNA DERECHA (5/12): AJUSTES DE MAQUETACIÓN PDF, PLANTILLA OMR Y BOTONES DE DESCARGA */}
         <div className="xl:col-span-5 space-y-5">
           <div className="bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 rounded-2xl p-5 shadow-md space-y-4">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <i className="fa-solid fa-sliders text-indigo-600"></i>
                 <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
                   Formato de Examen y Plantilla OMR
                 </h3>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarPrevisualizacionPDF((prev) => !prev);
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-black border flex items-center gap-1.5 cursor-pointer transition-all ${
+                  mostrarPrevisualizacionPDF
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                    : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700'
+                }`}
+              >
+                <i className="fa-solid fa-eye text-[10px]"></i>
+                <span>
+                  {mostrarPrevisualizacionPDF
+                    ? 'Vista Previa Activa'
+                    : 'Previsualizar Cuadernillo'}
+                </span>
+              </button>
             </div>
 
             {/* Modelo A/B y Código de Pie */}
@@ -1741,6 +1767,42 @@ export const SubseccionExportacionSimulacroPDF: React.FC<
           </div>
         </div>
       </div>
+
+      {/* PANEL DE PREVISUALIZACIÓN EN VIVO DEL CUADERNILLO PDF Y PLANTILLA OFICIAL */}
+      {paquetePDF && mostrarPrevisualizacionPDF && (
+        <div className="bg-white dark:bg-slate-800 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 sm:p-5 shadow-md space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-sm shadow-2xs shrink-0">
+                <i className="fa-solid fa-book-open-reader"></i>
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                  Previsualización en Vivo del Cuadernillo PDF Oficial
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Inspecciona cada página A4 del cuadernillo de examen, la hoja verde OMR en blanco o el anexo BOE antes de descargar o imprimir.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMostrarPrevisualizacionPDF(false)}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold cursor-pointer"
+            >
+              Ocultar vista previa
+            </button>
+          </div>
+
+          <VisorPrevisualizacionPdfOficial
+            paquete={paquetePDF}
+            documentoActivo={docPrevisualizado}
+            onCambiarDocumento={setDocPrevisualizado}
+            alturaContenedorClass="max-h-[680px]"
+          />
+        </div>
+      )}
     </div>
   );
 };

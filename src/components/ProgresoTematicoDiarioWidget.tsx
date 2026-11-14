@@ -72,7 +72,7 @@ export const ProgresoTematicoDiarioWidget: React.FC<ProgresoTematicoDiarioWidget
 
   const [modoPeriodo, setModoPeriodo] = useState<'dia_activo' | 'hoy' | '7dias' | 'global'>('dia_activo');
   const [fechaEspecifica, setFechaEspecifica] = useState<string>('');
-  const [colapsado, setColapsado] = useState<boolean>(false);
+  const [colapsado, setColapsado] = useState<boolean>(true);
 
   // Determinar la fecha efectiva cuando está en modo diario
   const fechaEfectivaDia = useMemo(() => {
@@ -204,16 +204,24 @@ export const ProgresoTematicoDiarioWidget: React.FC<ProgresoTematicoDiarioWidget
   }, [fechaEspecifica, modoPeriodo, hoyStr, hayActividadHoy, ultimaFechaActiva]);
 
   return (
-    <section className="bg-emerald-50/60 dark:bg-slate-800 border-2 border-emerald-300 dark:border-emerald-800 rounded-2xl shadow-sm overflow-hidden transition-all mb-5">
-      {/* Cabecera compacta del Widget */}
-      <div className="px-4 py-3 bg-linear-to-r from-emerald-100/85 via-teal-50/80 to-indigo-100/70 dark:from-emerald-950/60 dark:via-slate-800 dark:to-indigo-950/40 border-b-2 border-emerald-200 dark:border-slate-700 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
-            <i className="fa-solid fa-chart-column text-sm"></i>
+    <section className="bg-emerald-50/60 dark:bg-slate-800 border-2 border-emerald-300 dark:border-emerald-800 rounded-2xl shadow-sm overflow-hidden transition-all mb-3">
+      {/* Cabecera compacta del Widget (cerrado por defecto) */}
+      <div
+        className={`px-3.5 ${
+          colapsado ? 'py-2' : 'py-3 border-b-2 border-emerald-200 dark:border-slate-700'
+        } bg-linear-to-r from-emerald-100/85 via-teal-50/80 to-indigo-100/70 dark:from-emerald-950/60 dark:via-slate-800 dark:to-indigo-950/40 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5`}
+      >
+        <div
+          onClick={() => setColapsado((prev) => !prev)}
+          className="flex items-center gap-2.5 cursor-pointer select-none"
+          title={colapsado ? 'Pulsar para desplegar el Progreso Temático Diario' : 'Pulsar para contraer el Progreso Temático Diario'}
+        >
+          <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+            <i className="fa-solid fa-chart-column text-xs"></i>
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-xs sm:text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+              <h2 className="text-xs sm:text-[13px] font-black uppercase tracking-tight text-slate-900 dark:text-white">
                 Progreso Temático Diario · Comparativa de Acertadas
               </h2>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
@@ -223,9 +231,11 @@ export const ProgresoTematicoDiarioWidget: React.FC<ProgresoTematicoDiarioWidget
                 {testsEnPeriodo.length} {testsEnPeriodo.length === 1 ? 'test realizado' : 'tests realizados'}
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              Comparativa directa del número de preguntas acertadas y rendimiento por cada bloque oficial del temario C1.
-            </p>
+            {!colapsado && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                Comparativa directa del número de preguntas acertadas y rendimiento por cada bloque oficial del temario C1.
+              </p>
+            )}
           </div>
         </div>
 

@@ -11,6 +11,10 @@ import {
   RegistroTestDescargadoPDF,
   ResultadoGeneracionPDFOficial,
 } from '../utils/officialPdfExporter';
+import {
+  TipoDocumentoPrevisualizado,
+  VisorPrevisualizacionPdfOficial,
+} from './VisorPrevisualizacionPdfOficial';
 
 interface ExportarExamenPdfModalProps {
   examen: ExamenCompleto | null;
@@ -50,6 +54,10 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
   );
   const [mostrarListaCompletaDescargados, setMostrarListaCompletaDescargados] =
     useState<boolean>(false);
+  const [mostrarPrevisualizacion, setMostrarPrevisualizacion] =
+    useState<boolean>(true);
+  const [documentoPrevisualizado, setDocumentoPrevisualizado] =
+    useState<TipoDocumentoPrevisualizado>('cuadernillo');
 
   useEffect(() => {
     if (examen) {
@@ -63,6 +71,7 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
       setSupuestoExtra1Id('');
       setSupuestoExtra2Id('');
       setDescargaRealizadaEnSesion(false);
+      setDocumentoPrevisualizado('cuadernillo');
       setTestsDescargados(leerTestsDescargadosDeLocalStorage());
     }
   }, [examen]);
@@ -200,11 +209,13 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border-2 border-slate-300 dark:border-slate-700 space-y-4 max-h-[92vh] overflow-y-auto"
+        className={`bg-white dark:bg-slate-850 rounded-3xl ${
+          mostrarPrevisualizacion ? 'max-w-7xl' : 'max-w-2xl'
+        } w-full p-4 sm:p-6 shadow-2xl border-2 border-slate-300 dark:border-slate-700 space-y-4 max-h-[94vh] overflow-y-auto transition-all`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ENCABEZADO DE LA VENTANA DE DESCARGA (Incluye prueba actual y registro de qué tests se han descargado para realizar) */}
@@ -230,19 +241,39 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
                   )}
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  No se descarga ningún archivo automáticamente: revisa las opciones y pulsa el botón de descarga deseado.
+                  Revisa la previsualización del cuadernillo oficial A4 en tiempo real y pulsa el botón del archivo que desees descargar.
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center text-sm cursor-pointer shrink-0"
-              title="Cerrar ventana"
-            >
-              <i className="fa-solid fa-xmark"></i>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMostrarPrevisualizacion((prev) => !prev)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  mostrarPrevisualizacion
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                    : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100'
+                }`}
+                title="Mostrar u ocultar la previsualización interactiva del cuadernillo PDF"
+              >
+                <i className="fa-solid fa-eye text-[11px]"></i>
+                <span>
+                  {mostrarPrevisualizacion
+                    ? 'Ocultar Previsualización'
+                    : 'Previsualizar Cuadernillo PDF'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center text-sm cursor-pointer shrink-0"
+                title="Cerrar ventana"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
           </div>
 
           {/* Bloque 1 del encabezado: Test / Pruebas preparadas en el encabezado de esta descarga */}
@@ -366,6 +397,15 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
           </div>
         </div>
 
+        {/* CUERPO PRINCIPAL: Controles de configuración/descarga + Previsualización interactiva del Cuadernillo PDF */}
+        <div
+          className={
+            mostrarPrevisualizacion
+              ? 'grid grid-cols-1 xl:grid-cols-12 gap-4 items-start'
+              : 'space-y-4'
+          }
+        >
+          <div className={mostrarPrevisualizacion ? 'xl:col-span-5 space-y-4' : 'space-y-4'}>
         {/* Dos cuadros diferenciados: 1) Cuadernillo de Examen y 2) Plantilla Oficial Hoja de Respuestas */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {/* Cuadro 1: Cuadernillo de Examen Oficial */}
@@ -388,14 +428,27 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => ejecutarDescargaExplicita('solo_examen')}
-              className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
-            >
-              <i className="fa-solid fa-file-arrow-down"></i>
-              <span>Descargar Examen PDF</span>
-            </button>
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarPrevisualizacion(true);
+                  setDocumentoPrevisualizado('cuadernillo');
+                }}
+                className="w-full py-1.5 px-2.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-indigo-100/70 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <i className="fa-solid fa-eye text-[10px]"></i>
+                <span>Ver Cuadernillo en Vista Previa</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => ejecutarDescargaExplicita('solo_examen')}
+                className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+              >
+                <i className="fa-solid fa-file-arrow-down"></i>
+                <span>Descargar Examen PDF</span>
+              </button>
+            </div>
           </div>
 
           {/* Cuadro 2: Plantilla Oficial de Hoja de Respuestas OMR en Blanco */}
@@ -417,14 +470,27 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => ejecutarDescargaExplicita('solo_plantilla')}
-              className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
-            >
-              <i className="fa-solid fa-table-cells"></i>
-              <span>Descargar Plantilla en Blanco</span>
-            </button>
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarPrevisualizacion(true);
+                  setDocumentoPrevisualizado('plantilla_omr');
+                }}
+                className="w-full py-1.5 px-2.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-emerald-100/70 dark:hover:bg-slate-700 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <i className="fa-solid fa-eye text-[10px]"></i>
+                <span>Ver Hoja OMR en Vista Previa</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => ejecutarDescargaExplicita('solo_plantilla')}
+                className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+              >
+                <i className="fa-solid fa-table-cells"></i>
+                <span>Descargar Plantilla en Blanco</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -623,6 +689,19 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
                     ))}
                 </select>
               </div>
+            </div>
+          )}
+        </div>
+          </div>
+
+          {mostrarPrevisualizacion && (
+            <div className="xl:col-span-7">
+              <VisorPrevisualizacionPdfOficial
+                paquete={paqueteActual}
+                documentoActivo={documentoPrevisualizado}
+                onCambiarDocumento={setDocumentoPrevisualizado}
+                alturaContenedorClass="max-h-[560px]"
+              />
             </div>
           )}
         </div>
