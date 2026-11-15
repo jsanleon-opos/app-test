@@ -1,4 +1,5 @@
 import { ExamenCompleto, ItemAlmacenDuda, PreguntaExamen, TematicaNormativaId } from '../types';
+import { guardarDatoPersistenteIntegral, leerDatoPersistenteSincrono } from './idbPersistentStore';
 
 export type CategoriaTemarioId = TematicaNormativaId | 'informatica_c1';
 
@@ -1421,12 +1422,8 @@ export function normalizarClavePregunta(texto: string): string {
 const STORAGE_KEY_SUPERADAS = 'c1_preguntas_superadas_v1';
 
 export function obtenerMapaPreguntasSuperadasStorage(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_SUPERADAS);
-    return raw ? JSON.parse(raw) : {};
-  } catch (_) {
-    return {};
-  }
+  const obj = leerDatoPersistenteSincrono<Record<string, string>>(STORAGE_KEY_SUPERADAS, {});
+  return obj && typeof obj === 'object' ? { ...obj } : {};
 }
 
 /**
@@ -1464,9 +1461,7 @@ export function registrarRespuestasEnControlFalladas(
   });
 
   if (huboCambio) {
-    try {
-      localStorage.setItem(STORAGE_KEY_SUPERADAS, JSON.stringify(mapaActual));
-    } catch (_) {}
+    guardarDatoPersistenteIntegral(STORAGE_KEY_SUPERADAS, mapaActual);
   }
   return mapaActual;
 }

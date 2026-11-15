@@ -31,6 +31,12 @@ interface SeccionTestPreguntasFalladasProps {
     respuestas: Record<number, string>
   ) => void;
   onExportarExamenPDF?: (examen: ExamenCompleto) => void;
+  modoLectura?: boolean;
+  onToggleModoLectura?: (forzarValor?: boolean) => void;
+  tamanoModoLectura?: 'grande' | 'muy_grande' | 'extra';
+  onCambiarTamanoModoLectura?: (tamano: 'grande' | 'muy_grande' | 'extra') => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
 }
 
 export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladasProps> = ({
@@ -44,6 +50,12 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
   onActualizarPreguntaGlobal,
   onRegistrarResultadoPreguntas,
   onExportarExamenPDF,
+  modoLectura = false,
+  onToggleModoLectura,
+  tamanoModoLectura = 'muy_grande',
+  onCambiarTamanoModoLectura,
+  isDarkMode = false,
+  onToggleDarkMode,
 }) => {
   // Filtros de selección de preguntas falladas
   const [modoFiltroPrincipal, setModoFiltroPrincipal] = useState<'ambos' | 'tematica' | 'ley'>('ambos');
@@ -92,6 +104,26 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
     }, 1000);
     return () => clearInterval(timer);
   }, [testActivo, testFinalizado, relojActivado]);
+
+  // Si no hay test activo y el Modo Lectura quedó encendido, restaurar vista estándar automáticamente
+  useEffect(() => {
+    if (!testActivo && modoLectura && onToggleModoLectura) {
+      onToggleModoLectura(false);
+    }
+  }, [testActivo, modoLectura, onToggleModoLectura]);
+
+  // Atajo rápido Alt+L para conmutar Modo Lectura durante el test
+  useEffect(() => {
+    if (!testActivo || !onToggleModoLectura) return;
+    const handleKeyDown = (ev: KeyboardEvent) => {
+      if (ev.altKey && ev.key.toLowerCase() === 'l') {
+        ev.preventDefault();
+        onToggleModoLectura();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [testActivo, onToggleModoLectura]);
 
   // Extraer todas las preguntas falladas consolidadas (por defecto solo las pendientes de superar)
   const todasLasFalladas = useMemo(() => {
@@ -405,86 +437,248 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
       ? ((testActivo.resultado.puntuacionDirecta / Math.max(1, testActivo.preguntas.length)) * 70).toFixed(2)
       : '0.00';
 
+    const claseEnunciadoModoLectura =
+      tamanoModoLectura === 'extra'
+        ? 'text-xl sm:text-2xl md:text-[27px] leading-relaxed'
+        : tamanoModoLectura === 'muy_grande'
+        ? 'text-lg sm:text-xl md:text-[23px] leading-relaxed'
+        : 'text-base sm:text-lg md:text-[20px] leading-relaxed';
+
+    const claseOpcionModoLectura =
+      tamanoModoLectura === 'extra'
+        ? 'text-base sm:text-lg md:text-[20px] leading-relaxed'
+        : tamanoModoLectura === 'muy_grande'
+        ? 'text-sm sm:text-base md:text-[18px] leading-relaxed'
+        : 'text-sm sm:text-[16px] leading-relaxed';
+
+    const claseBadgeLetraModoLectura =
+      tamanoModoLectura === 'extra'
+        ? 'w-9 h-9 text-base rounded-xl'
+        : tamanoModoLectura === 'muy_grande'
+        ? 'w-8 h-8 text-sm rounded-xl'
+        : 'w-7 h-7 text-xs rounded-lg';
+
     return (
-      <div className="space-y-5">
-        {/* Barra superior de control del Test de Falladas */}
-        <div className="bg-rose-50/85 dark:bg-rose-950/35 border-2 border-rose-300 dark:border-rose-800 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center text-base shadow-xs shrink-0">
-              <i className="fa-solid fa-rotate"></i>
+      <div className={modoLectura ? 'max-w-4xl mx-auto w-full space-y-4 py-1' : 'space-y-5'}>
+        {/* BARRA MINIMALISTA DE CONCENTRACIÓN EN MODO LECTURA */}
+        {modoLectura && (
+          <div className="bg-white/95 dark:bg-slate-900/95 border border-indigo-200 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xs font-black tracking-tight text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                <i className="fa-solid fa-book-open-reader text-indigo-600 dark:text-indigo-400"></i>
+                <span>Modo Lectura</span>
+              </span>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <select
+                value={indicePreguntaActual}
+                onChange={(e) => setIndicePreguntaActual(Number(e.target.value))}
+                aria-label="Seleccionar pregunta"
+                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer"
+              >
+                {testActivo.preguntas.map((_, idx) => {
+                  const r = respuestasUsuario[idx];
+                  const d = preguntasDudosas.has(idx);
+                  return (
+                    <option key={idx} value={idx}>
+                      Pregunta {idx + 1} de {testActivo.preguntas.length}
+                      {r ? ` (${r})` : ''}
+                      {d ? ' · Dudosa' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+                {totalContestadas}/{testActivo.preguntas.length} respondidas
+              </span>
+              {relojActivado && (
+                <>
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                  <span className="text-xs font-mono font-black text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                    <i className="fa-regular fa-clock text-indigo-500"></i>
+                    <span>{formatearTiempo(segundosTranscurridos)}</span>
+                  </span>
+                </>
+              )}
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 font-mono">
-                  Test Exclusivo de Preguntas Falladas
-                </span>
-                <span className="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                  Computa en Historial · No duplica Banco de Exámenes
-                </span>
-              </div>
-              <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5">
-                {testActivo.titulo}
-              </h2>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap w-full lg:w-auto justify-between lg:justify-end">
-            {relojActivado && (
-              <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <i className="fa-regular fa-clock text-indigo-500"></i>
-                <span>{formatearTiempo(segundosTranscurridos)}</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Selector de tamaño tipográfico A / A+ / A++ */}
+              {onCambiarTamanoModoLectura && (
+                <div
+                  className="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700"
+                  role="group"
+                  aria-label="Tamaño de fuente del Modo Lectura"
+                >
+                  {(
+                    [
+                      { id: 'grande', label: 'A', title: 'Fuente grande' },
+                      { id: 'muy_grande', label: 'A+', title: 'Fuente muy grande' },
+                      { id: 'extra', label: 'A++', title: 'Fuente extra grande' },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => onCambiarTamanoModoLectura(opt.id)}
+                      title={opt.title}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-mono font-black transition-all cursor-pointer ${
+                        tamanoModoLectura === opt.id
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
-              {totalContestadas} de {testActivo.preguntas.length} contestadas
-            </span>
-
-            {onExportarExamenPDF && (
               <button
                 type="button"
-                onClick={() => onExportarExamenPDF(testActivo)}
-                className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 text-xs font-black shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Exportar test en formato PDF oficial + Plantilla de hoja de respuestas en blanco"
+                onClick={() => toggleDudosa(indicePreguntaActual)}
+                className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  preguntasDudosas.has(indicePreguntaActual)
+                    ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-400 font-black'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-amber-50'
+                }`}
+                title="Marcar o desmarcar pregunta como dudosa"
               >
-                <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400"></i>
-                <span>Exportar PDF</span>
+                <i className="fa-regular fa-flag text-[10px]"></i>
+                <span>{preguntasDudosas.has(indicePreguntaActual) ? 'Dudosa' : 'Marcar dudosa'}</span>
               </button>
-            )}
 
-            {!testFinalizado ? (
-              <button
-                type="button"
-                onClick={solicitarEvaluarTestFalladas}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <i className="fa-solid fa-flag-checkered"></i>
-                <span>Evaluar y Guardar en Historial</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
+              {onToggleDarkMode && (
                 <button
                   type="button"
-                  onClick={onIrAHistorial}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  onClick={onToggleDarkMode}
+                  className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 cursor-pointer"
+                  title={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
                 >
-                  <i className="fa-solid fa-table-list"></i>
-                  <span>Ver en Historial</span>
+                  <i className={`fa-solid ${isDarkMode ? 'fa-sun text-amber-400' : 'fa-moon'} text-xs`}></i>
                 </button>
+              )}
+
+              {!testFinalizado && (
                 <button
                   type="button"
-                  onClick={() => setTestActivo(null)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer"
+                  onClick={solicitarEvaluarTestFalladas}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-1.5"
                 >
-                  Configurar Otro Test
+                  <i className="fa-solid fa-flag-checkered text-[10px]"></i>
+                  <span>Evaluar</span>
                 </button>
-              </div>
-            )}
+              )}
+
+              {onToggleModoLectura && (
+                <button
+                  type="button"
+                  onClick={() => onToggleModoLectura(false)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-700 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-black transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Salir del Modo Lectura (Alt+L)"
+                >
+                  <i className="fa-solid fa-compress text-[10px]"></i>
+                  <span>Salir Modo Lectura</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Resumen Final de Resultados cuando el test ha concluido */}
-        {testFinalizado && testActivo.resultado && (
+        {/* Barra superior de control del Test de Falladas (oculta en Modo Lectura) */}
+        {!modoLectura && (
+          <div className="bg-rose-50/85 dark:bg-rose-950/35 border-2 border-rose-300 dark:border-rose-800 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center text-base shadow-xs shrink-0">
+                <i className="fa-solid fa-rotate"></i>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 font-mono">
+                    Test Exclusivo de Preguntas Falladas
+                  </span>
+                  <span className="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    Computa en Historial · No duplica Banco de Exámenes
+                  </span>
+                </div>
+                <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5">
+                  {testActivo.titulo}
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap w-full lg:w-auto justify-between lg:justify-end">
+              {relojActivado && (
+                <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <i className="fa-regular fa-clock text-indigo-500"></i>
+                  <span>{formatearTiempo(segundosTranscurridos)}</span>
+                </div>
+              )}
+
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+                {totalContestadas} de {testActivo.preguntas.length} contestadas
+              </span>
+
+              {onToggleModoLectura && (
+                <button
+                  type="button"
+                  onClick={() => onToggleModoLectura(true)}
+                  className="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-xs font-black shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Activar Modo Lectura sin distracciones con fuente ampliada y centrada (Alt+L)"
+                >
+                  <i className="fa-solid fa-book-open-reader text-indigo-600 dark:text-indigo-400"></i>
+                  <span>Modo Lectura</span>
+                </button>
+              )}
+
+              {onExportarExamenPDF && (
+                <button
+                  type="button"
+                  onClick={() => onExportarExamenPDF(testActivo)}
+                  className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 text-xs font-black shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Exportar test en formato PDF oficial + Plantilla de hoja de respuestas en blanco"
+                >
+                  <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400"></i>
+                  <span>Exportar PDF</span>
+                </button>
+              )}
+
+              {!testFinalizado ? (
+                <button
+                  type="button"
+                  onClick={solicitarEvaluarTestFalladas}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <i className="fa-solid fa-flag-checkered"></i>
+                  <span>Evaluar y Guardar en Historial</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onIrAHistorial}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <i className="fa-solid fa-table-list"></i>
+                    <span>Ver en Historial</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (modoLectura && onToggleModoLectura) onToggleModoLectura(false);
+                      setTestActivo(null);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Configurar Otro Test
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Resumen Final de Resultados cuando el test ha concluido (oculto en Modo Lectura) */}
+        {!modoLectura && testFinalizado && testActivo.resultado && (
           <div className="bg-linear-to-br from-emerald-50/90 via-white to-indigo-50/60 dark:from-emerald-950/30 dark:via-slate-800 dark:to-indigo-950/30 border-2 border-emerald-300 dark:border-emerald-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/70 dark:border-slate-700 pb-3">
               <div className="flex items-center gap-3">
@@ -569,229 +763,303 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
           </div>
         )}
 
-        {/* Barra de navegación numérica de preguntas */}
-        <div className="bg-sky-50/85 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-800 rounded-2xl p-3.5 shadow-sm space-y-2.5">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
-            <span className="uppercase tracking-wider font-mono text-[10.5px]">
-              Mapa de Preguntas del Test de Falladas ({testActivo.preguntas.length})
-            </span>
-            <span className="text-[11px] font-mono">
-              Haz clic en cualquier número para desplazarte
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {testActivo.preguntas.map((p, idx) => {
-              const resp = respuestasUsuario[idx];
-              const corr = p.opciones.find((o) => o.esCorrecta)?.id;
-              const esDudosa = preguntasDudosas.has(idx);
-              const evaluada = testFinalizado || (modalidadCorreccion === 'paso_a_paso' && Boolean(resp));
+        {/* Barra de navegación numérica de preguntas (oculta en Modo Lectura) */}
+        {!modoLectura && (
+          <div className="bg-sky-50/85 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-800 rounded-2xl p-3.5 shadow-sm space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
+              <span className="uppercase tracking-wider font-mono text-[10.5px]">
+                Mapa de Preguntas del Test de Falladas ({testActivo.preguntas.length})
+              </span>
+              <span className="text-[11px] font-mono">
+                Haz clic en cualquier número para desplazarte
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {testActivo.preguntas.map((p, idx) => {
+                const resp = respuestasUsuario[idx];
+                const corr = p.opciones.find((o) => o.esCorrecta)?.id;
+                const esDudosa = preguntasDudosas.has(idx);
+                const evaluada = testFinalizado || (modalidadCorreccion === 'paso_a_paso' && Boolean(resp));
 
-              let estiloBoton =
-                'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
-              if (evaluada && resp) {
-                estiloBoton =
-                  resp === corr
-                    ? 'bg-emerald-600 text-white border-emerald-700 font-black'
-                    : 'bg-rose-600 text-white border-rose-700 font-black';
-              } else if (resp) {
-                estiloBoton = 'bg-indigo-600 text-white border-indigo-700 font-black';
-              }
+                let estiloBoton =
+                  'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+                if (evaluada && resp) {
+                  estiloBoton =
+                    resp === corr
+                      ? 'bg-emerald-600 text-white border-emerald-700 font-black'
+                      : 'bg-rose-600 text-white border-rose-700 font-black';
+                } else if (resp) {
+                  estiloBoton = 'bg-indigo-600 text-white border-indigo-700 font-black';
+                }
 
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setIndicePreguntaActual(idx)}
-                  className={`h-8 min-w-8 px-2 rounded-lg border text-xs font-mono transition-all cursor-pointer relative ${estiloBoton} ${
-                    indicePreguntaActual === idx ? 'ring-2 ring-offset-1 ring-indigo-500 scale-105' : ''
-                  }`}
-                >
-                  {idx + 1}
-                  {esDudosa && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-white"></span>
-                  )}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setIndicePreguntaActual(idx)}
+                    className={`h-8 min-w-8 px-2 rounded-lg border text-xs font-mono transition-all cursor-pointer relative ${estiloBoton} ${
+                      indicePreguntaActual === idx ? 'ring-2 ring-offset-1 ring-indigo-500 scale-105' : ''
+                    }`}
+                  >
+                    {idx + 1}
+                    {esDudosa && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-white"></span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Tarjeta de la Pregunta Actual */}
         {preguntaActual && (
-          <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4">
-            {/* Cabecera de la pregunta con botones 100% Inédita, Desmarcar y Dudosa juntos */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-mono">
-                  PREGUNTA #{indicePreguntaActual + 1} (DE {testActivo.preguntas.length})
+          <div
+            className={
+              modoLectura
+                ? 'bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-3xl px-6 sm:px-12 py-8 sm:py-11 shadow-lg min-h-[480px] flex flex-col justify-between gap-7'
+                : 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4'
+            }
+          >
+            {/* Cabecera de la pregunta */}
+            {modoLectura ? (
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-slate-500 dark:text-slate-400 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span className="font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                  PREGUNTA #{indicePreguntaActual + 1} DE {testActivo.preguntas.length}
                 </span>
+                {metaFalloActual?.leyes && metaFalloActual.leyes.length > 0 && (
+                  <>
+                    <span>·</span>
+                    <span className="font-semibold text-slate-600 dark:text-slate-300">
+                      {metaFalloActual.leyes[0]}
+                    </span>
+                  </>
+                )}
+                {respActual && !testFinalizado && (
+                  <>
+                    <span>·</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDesmarcarPregunta(indicePreguntaActual)}
+                      className="text-rose-600 dark:text-rose-400 hover:underline font-bold cursor-pointer"
+                    >
+                      Desmarcar ({respActual})
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-mono">
+                    PREGUNTA #{indicePreguntaActual + 1} (DE {testActivo.preguntas.length})
+                  </span>
 
-                {(() => {
-                  const refConvFallo = obtenerReferenciaConvocatoriaOficial(
-                    preguntaActual,
-                    metaFalloActual
-                      ? { id: metaFalloActual.examenOrigenId, titulo: metaFalloActual.examenOrigenTitulo }
-                      : testActivo
-                  );
-                  if (refConvFallo) {
+                  {(() => {
+                    const refConvFallo = obtenerReferenciaConvocatoriaOficial(
+                      preguntaActual,
+                      metaFalloActual
+                        ? { id: metaFalloActual.examenOrigenId, titulo: metaFalloActual.examenOrigenTitulo }
+                        : testActivo
+                    );
+                    if (refConvFallo) {
+                      return (
+                        <span
+                          className="px-2.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-mono font-black flex items-center gap-1.5"
+                          title={`Pregunta procedente de convocatoria oficial: ${refConvFallo}`}
+                        >
+                          <i className="fa-solid fa-landmark-flag text-amber-600 dark:text-amber-400 text-[9px]"></i>
+                          <span>{formatearBadgeConvocatoriaOficial(refConvFallo)}</span>
+                        </span>
+                      );
+                    }
                     return (
-                      <span
-                        className="px-2.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-mono font-black flex items-center gap-1.5"
-                        title={`Pregunta procedente de convocatoria oficial: ${refConvFallo}`}
-                      >
-                        <i className="fa-solid fa-landmark-flag text-amber-600 dark:text-amber-400 text-[9px]"></i>
-                        <span>{formatearBadgeConvocatoriaOficial(refConvFallo)}</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px] font-mono font-black flex items-center gap-1">
+                        <i className="fa-solid fa-shield-halved text-[9px]"></i>
+                        <span>100% INÉDITA · {preguntaActual.codigoInedita || `FALLO-${indicePreguntaActual + 1}`}</span>
                       </span>
                     );
-                  }
-                  return (
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px] font-mono font-black flex items-center gap-1">
-                      <i className="fa-solid fa-shield-halved text-[9px]"></i>
-                      <span>100% INÉDITA · {preguntaActual.codigoInedita || `FALLO-${indicePreguntaActual + 1}`}</span>
+                  })()}
+
+                  {metaFalloActual && (
+                    <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-[10px] font-mono font-bold">
+                      Fallada {metaFalloActual.vecesFallada} {metaFalloActual.vecesFallada === 1 ? 'vez' : 'veces'} ·{' '}
+                      {obtenerInfoCategoriaTemario(metaFalloActual.categoriaId).sigla}
                     </span>
-                  );
-                })()}
+                  )}
 
-                {metaFalloActual && (
-                  <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-[10px] font-mono font-bold">
-                    Fallada {metaFalloActual.vecesFallada} {metaFalloActual.vecesFallada === 1 ? 'vez' : 'veces'} ·{' '}
-                    {obtenerInfoCategoriaTemario(metaFalloActual.categoriaId).sigla}
-                  </span>
-                )}
+                  {respActual && !testFinalizado && (
+                    <button
+                      type="button"
+                      onClick={() => handleDesmarcarPregunta(indicePreguntaActual)}
+                      className="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-slate-700 dark:text-slate-200 hover:text-rose-600 border border-slate-300 dark:border-slate-600 text-[10px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <i className="fa-solid fa-eraser text-[9px]"></i>
+                      <span>DESMARCAR ({respActual})</span>
+                    </button>
+                  )}
 
-                {respActual && !testFinalizado && (
                   <button
                     type="button"
-                    onClick={() => handleDesmarcarPregunta(indicePreguntaActual)}
-                    className="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-slate-700 dark:text-slate-200 hover:text-rose-600 border border-slate-300 dark:border-slate-600 text-[10px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    onClick={() => toggleDudosa(indicePreguntaActual)}
+                    className={`px-2.5 py-0.5 rounded-md border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      preguntasDudosas.has(indicePreguntaActual)
+                        ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-400 font-black'
+                        : 'bg-amber-50/60 dark:bg-slate-800 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-slate-700 hover:bg-amber-100'
+                    }`}
                   >
-                    <i className="fa-solid fa-eraser text-[9px]"></i>
-                    <span>DESMARCAR ({respActual})</span>
+                    <i className="fa-regular fa-flag text-[9px]"></i>
+                    <span>{preguntasDudosas.has(indicePreguntaActual) ? 'DUDOSA MARCADA' : 'Dudosa'}</span>
                   </button>
-                )}
-
-                {/* Botón Dudosa situado directamente en el recuadro de la pregunta junto a 100% inédita y desmarcar */}
-                <button
-                  type="button"
-                  onClick={() => toggleDudosa(indicePreguntaActual)}
-                  className={`px-2.5 py-0.5 rounded-md border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    preguntasDudosas.has(indicePreguntaActual)
-                      ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-400 font-black'
-                      : 'bg-amber-50/60 dark:bg-slate-800 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-slate-700 hover:bg-amber-100'
-                  }`}
-                >
-                  <i className="fa-regular fa-flag text-[9px]"></i>
-                  <span>{preguntasDudosas.has(indicePreguntaActual) ? 'DUDOSA MARCADA' : 'Dudosa'}</span>
-                </button>
-              </div>
-
-              {metaFalloActual?.leyes && metaFalloActual.leyes.length > 0 && (
-                <div className="flex items-center gap-1 flex-wrap">
-                  {metaFalloActual.leyes.map((ley, i) => (
-                    <span
-                      key={i}
-                      className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold"
-                    >
-                      {ley}
-                    </span>
-                  ))}
                 </div>
-              )}
-            </div>
 
-            {/* Enunciado */}
-            <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-relaxed">
-              {preguntaActual.enunciado}
-            </p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {onToggleModoLectura && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleModoLectura(true)}
+                      className="px-2.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-black cursor-pointer flex items-center gap-1"
+                      title="Activar Modo Lectura centrado (Alt+L)"
+                    >
+                      <i className="fa-solid fa-book-open-reader text-[9px]"></i>
+                      <span>Modo Lectura</span>
+                    </button>
+                  )}
 
-            {/* Opciones A, B, C, D (altura invariable, colores suaves, visado verde ✓ y aspa roja ✗) */}
-            <div className="space-y-2.5 pt-1">
-              {preguntaActual.opciones.map((opc) => {
-                const seleccionada = respActual === opc.id;
-                let claseCaja =
-                  'border-slate-300 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/70 hover:bg-indigo-50/40 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200';
-                let claseLetra =
-                  'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200';
-                let indicadorDerecha: React.ReactNode = null;
+                  {metaFalloActual?.leyes &&
+                    metaFalloActual.leyes.map((ley, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold"
+                      >
+                        {ley}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
 
-                if (mostrarCorreccionInmediata) {
-                  if (opc.esCorrecta) {
+            {/* Cuerpo central: Enunciado y Opciones A, B, C, D */}
+            <div className={modoLectura ? 'space-y-7 my-auto' : 'space-y-4'}>
+              <p
+                className={
+                  modoLectura
+                    ? `max-w-3xl mx-auto w-full text-center font-bold text-slate-900 dark:text-white ${claseEnunciadoModoLectura}`
+                    : 'text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-relaxed'
+                }
+              >
+                {preguntaActual.enunciado}
+              </p>
+
+              {/* Opciones A, B, C, D (altura invariable, colores suaves, visado verde ✓ y aspa roja ✗) */}
+              <div className={modoLectura ? 'max-w-3xl mx-auto w-full space-y-3.5' : 'space-y-2.5 pt-1'}>
+                {preguntaActual.opciones.map((opc) => {
+                  const seleccionada = respActual === opc.id;
+                  let claseCaja =
+                    'border-slate-300 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/70 hover:bg-indigo-50/40 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200';
+                  let claseLetra =
+                    'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200';
+                  let indicadorDerecha: React.ReactNode = null;
+
+                  if (mostrarCorreccionInmediata) {
+                    if (opc.esCorrecta) {
+                      claseCaja =
+                        'border-emerald-300/85 dark:border-emerald-800/70 bg-emerald-50/45 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100';
+                      claseLetra =
+                        'bg-emerald-100/85 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200';
+                      indicadorDerecha = (
+                        <span
+                          className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"
+                          title="Respuesta acertada / correcta"
+                        >
+                          <i className="fa-solid fa-check text-xs"></i>
+                        </span>
+                      );
+                    } else if (seleccionada && !opc.esCorrecta) {
+                      claseCaja =
+                        'border-rose-300/85 dark:border-rose-800/70 bg-rose-50/45 dark:bg-rose-950/20 text-slate-900 dark:text-slate-100';
+                      claseLetra =
+                        'bg-rose-100/85 dark:bg-rose-900/50 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200';
+                      indicadorDerecha = (
+                        <span
+                          className="h-6 w-6 rounded-full bg-rose-100 dark:bg-rose-900/60 border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 flex items-center justify-center"
+                          title="Respuesta incorrecta"
+                        >
+                          <i className="fa-solid fa-xmark text-xs"></i>
+                        </span>
+                      );
+                    } else {
+                      claseCaja =
+                        'border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400';
+                    }
+                  } else if (seleccionada) {
                     claseCaja =
-                      'border-emerald-300/85 dark:border-emerald-800/70 bg-emerald-50/45 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100';
-                    claseLetra =
-                      'bg-emerald-100/85 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200';
+                      'border-indigo-400 dark:border-indigo-600 bg-indigo-50/55 dark:bg-indigo-950/35 text-slate-900 dark:text-slate-100 ring-1 ring-indigo-400/50';
+                    claseLetra = 'bg-indigo-600 border border-indigo-600 text-white';
                     indicadorDerecha = (
                       <span
-                        className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"
-                        title="Respuesta acertada / correcta"
+                        className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"
+                        title="Opción seleccionada (clic de nuevo para desmarcar)"
                       >
                         <i className="fa-solid fa-check text-xs"></i>
                       </span>
                     );
-                  } else if (seleccionada && !opc.esCorrecta) {
-                    claseCaja =
-                      'border-rose-300/85 dark:border-rose-800/70 bg-rose-50/45 dark:bg-rose-950/20 text-slate-900 dark:text-slate-100';
-                    claseLetra =
-                      'bg-rose-100/85 dark:bg-rose-900/50 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200';
-                    indicadorDerecha = (
-                      <span
-                        className="h-6 w-6 rounded-full bg-rose-100 dark:bg-rose-900/60 border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 flex items-center justify-center"
-                        title="Respuesta incorrecta"
-                      >
-                        <i className="fa-solid fa-xmark text-xs"></i>
-                      </span>
-                    );
-                  } else {
-                    claseCaja =
-                      'border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400';
                   }
-                } else if (seleccionada) {
-                  claseCaja =
-                    'border-indigo-400 dark:border-indigo-600 bg-indigo-50/55 dark:bg-indigo-950/35 text-slate-900 dark:text-slate-100 ring-1 ring-indigo-400/50';
-                  claseLetra = 'bg-indigo-600 border border-indigo-600 text-white';
-                  indicadorDerecha = (
-                    <span
-                      className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"
-                      title="Opción seleccionada (clic de nuevo para desmarcar)"
+
+                  return (
+                    <div
+                      key={opc.id}
+                      onClick={() => handleSeleccionarOpcion(indicePreguntaActual, opc.id)}
+                      className={`${
+                        modoLectura ? 'px-5 py-4 rounded-2xl border-2 items-center' : 'p-3.5 rounded-xl border items-start'
+                      } transition-colors cursor-pointer flex justify-between gap-3.5 ${claseCaja}`}
                     >
-                      <i className="fa-solid fa-check text-xs"></i>
-                    </span>
-                  );
-                }
+                      {modoLectura ? (
+                        <>
+                          <span
+                            className={`${claseBadgeLetraModoLectura} font-mono font-black flex items-center justify-center shrink-0 ${claseLetra}`}
+                          >
+                            {opc.id}
+                          </span>
+                          <span className={`flex-1 text-center font-medium block ${claseOpcionModoLectura}`}>
+                            {opc.texto}
+                          </span>
+                          <span className="h-7 w-7 shrink-0 flex items-center justify-center">
+                            {indicadorDerecha}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-start gap-3 flex-1">
+                            <span
+                              className={`w-6 h-6 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${claseLetra}`}
+                            >
+                              {opc.id}
+                            </span>
+                            <span className="text-xs sm:text-sm font-medium leading-snug block py-0.5">
+                              {opc.texto}
+                            </span>
+                          </div>
 
-                return (
-                  <div
-                    key={opc.id}
-                    onClick={() => handleSeleccionarOpcion(indicePreguntaActual, opc.id)}
-                    className={`p-3.5 rounded-xl border transition-colors cursor-pointer flex items-start justify-between gap-3 ${claseCaja}`}
-                  >
-                    <div className="flex items-start gap-3 flex-1">
-                      <span
-                        className={`w-6 h-6 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${claseLetra}`}
-                      >
-                        {opc.id}
-                      </span>
-                      <span className="text-xs sm:text-sm font-medium leading-snug block py-0.5">
-                        {opc.texto}
-                      </span>
+                          <span className="h-6 w-6 shrink-0 mt-0.5 flex items-center justify-center">
+                            {indicadorDerecha}
+                          </span>
+                        </>
+                      )}
                     </div>
-
-                    <span className="h-6 w-6 shrink-0 mt-0.5 flex items-center justify-center">
-                      {indicadorDerecha}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Pie de la tarjeta: navegación y botón de abrir ventana Justificación BOE */}
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   disabled={indicePreguntaActual <= 0}
                   onClick={() => setIndicePreguntaActual((p) => Math.max(0, p - 1))}
-                  className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 disabled:opacity-40 text-xs font-bold cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 disabled:opacity-40 text-xs font-bold cursor-pointer flex items-center gap-1.5"
                 >
                   <i className="fa-solid fa-chevron-left text-[10px]"></i>
                   <span>Anterior</span>
@@ -802,7 +1070,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
                   onClick={() =>
                     setIndicePreguntaActual((p) => Math.min(testActivo.preguntas.length - 1, p + 1))
                   }
-                  className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 disabled:opacity-40 text-xs font-bold cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 disabled:opacity-40 text-xs font-bold cursor-pointer flex items-center gap-1.5"
                 >
                   <span>Siguiente</span>
                   <i className="fa-solid fa-chevron-right text-[10px]"></i>
@@ -821,7 +1089,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
                   </button>
                 )}
 
-                {respActual && !testFinalizado && (
+                {!modoLectura && respActual && !testFinalizado && (
                   <button
                     type="button"
                     onClick={() => handleDesmarcarPregunta(indicePreguntaActual)}

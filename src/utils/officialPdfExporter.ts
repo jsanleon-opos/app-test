@@ -1,5 +1,10 @@
 import { jsPDF } from 'jspdf';
 import { ExamenCompleto, PreguntaExamen } from '../types';
+import {
+  eliminarDeIndexedDB,
+  guardarDatoPersistenteIntegral,
+  leerDatoPersistenteSincrono,
+} from './idbPersistentStore';
 
 export interface OpcionesExportacionPDFOficial {
   modelo?: 'A' | 'B';
@@ -62,14 +67,11 @@ export interface RegistroTestDescargadoPDF {
 const STORAGE_KEY_TESTS_DESCARGADOS_PDF = 'c1_tests_descargados_pdf';
 
 export function leerTestsDescargadosDeLocalStorage(): RegistroTestDescargadoPDF[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_TESTS_DESCARGADOS_PDF);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (_) {
-    return [];
-  }
+  const lista = leerDatoPersistenteSincrono<RegistroTestDescargadoPDF[]>(
+    STORAGE_KEY_TESTS_DESCARGADOS_PDF,
+    []
+  );
+  return Array.isArray(lista) ? lista : [];
 }
 
 export function registrarDescargaTestEnLocalStorage(
@@ -91,10 +93,8 @@ export function registrarDescargaTestEnLocalStorage(
     fechaDescargaISO: ahora,
   };
 
-  const actualizados = [registroCompleto, ...sinDuplicadoExacto].slice(0, 30);
-  try {
-    localStorage.setItem(STORAGE_KEY_TESTS_DESCARGADOS_PDF, JSON.stringify(actualizados));
-  } catch (_) {}
+  const actualizados = [registroCompleto, ...sinDuplicadoExacto].slice(0, 50);
+  guardarDatoPersistenteIntegral(STORAGE_KEY_TESTS_DESCARGADOS_PDF, actualizados);
   return actualizados;
 }
 
@@ -102,16 +102,16 @@ export function eliminarRegistroTestDescargadoDeLocalStorage(
   registroId: string
 ): RegistroTestDescargadoPDF[] {
   const filtrados = leerTestsDescargadosDeLocalStorage().filter((r) => r.id !== registroId);
-  try {
-    localStorage.setItem(STORAGE_KEY_TESTS_DESCARGADOS_PDF, JSON.stringify(filtrados));
-  } catch (_) {}
+  guardarDatoPersistenteIntegral(STORAGE_KEY_TESTS_DESCARGADOS_PDF, filtrados);
   return filtrados;
 }
 
 export function limpiarTestsDescargadosDeLocalStorage(): RegistroTestDescargadoPDF[] {
+  guardarDatoPersistenteIntegral(STORAGE_KEY_TESTS_DESCARGADOS_PDF, []);
   try {
     localStorage.removeItem(STORAGE_KEY_TESTS_DESCARGADOS_PDF);
   } catch (_) {}
+  void eliminarDeIndexedDB(STORAGE_KEY_TESTS_DESCARGADOS_PDF);
   return [];
 }
 

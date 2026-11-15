@@ -54,6 +54,12 @@ interface SeccionSimulacroOficialProps {
   onCambiarAmbitoExamen?: (examenId: string, nuevoAmbito: ConvocatoriaAmbito) => void;
   onCambiarCategoriaExamen?: (examenId: string, nuevaCategoria: CategoriaExamen) => void;
   onExportarExamenPDF?: (examen: ExamenCompleto) => void;
+  modoLectura?: boolean;
+  onToggleModoLectura?: (forzarValor?: boolean) => void;
+  tamanoModoLectura?: 'grande' | 'muy_grande' | 'extra';
+  onCambiarTamanoModoLectura?: (tamano: 'grande' | 'muy_grande' | 'extra') => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
 }
 
 interface GrupoLeyOTemaDisponible {
@@ -125,6 +131,12 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
   onCambiarAmbitoExamen,
   onCambiarCategoriaExamen,
   onExportarExamenPDF,
+  modoLectura = false,
+  onToggleModoLectura,
+  tamanoModoLectura = 'muy_grande',
+  onCambiarTamanoModoLectura,
+  isDarkMode = false,
+  onToggleDarkMode,
 }) => {
   // Pestaña activa dentro de Simulacro Oficial: 1) Simulacro actual en pantalla | 2) Configuración de exportación PDF y plantilla oficial
   const [pestanaSimulacro, setPestanaSimulacro] = useState<'interactivo' | 'exportar_pdf'>('interactivo');
@@ -178,6 +190,26 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
   const [preguntaModalJustificacion, setPreguntaModalJustificacion] = useState<number | null>(null);
   const [preguntaParaSelectorLeyes, setPreguntaParaSelectorLeyes] = useState<PreguntaExamen | null>(null);
   const [mostrarConfirmarEvaluacion, setMostrarConfirmarEvaluacion] = useState<boolean>(false);
+
+  // Si se sale del simulacro activo o se cambia a la pestaña de exportación PDF, desactivar Modo Lectura
+  useEffect(() => {
+    if ((!simulacroActivo || pestanaSimulacro !== 'interactivo') && modoLectura && onToggleModoLectura) {
+      onToggleModoLectura(false);
+    }
+  }, [simulacroActivo, pestanaSimulacro, modoLectura, onToggleModoLectura]);
+
+  // Atajo Alt+L para activar/desactivar Modo Lectura durante el simulacro interactivo
+  useEffect(() => {
+    if (!simulacroActivo || pestanaSimulacro !== 'interactivo' || !onToggleModoLectura) return;
+    const handleKeyDown = (ev: KeyboardEvent) => {
+      if (ev.altKey && ev.key.toLowerCase() === 'l') {
+        ev.preventDefault();
+        onToggleModoLectura();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [simulacroActivo, pestanaSimulacro, onToggleModoLectura]);
 
   // Helpers para cambiar el ámbito o la categoría de un test o supuesto desde su tarjeta
   const handleCambiarAmbitoDesdeTarjeta = (examenId: string, nuevoAmbito: ConvocatoriaAmbito) => {
@@ -1874,145 +1906,339 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
         : undefined;
     const opcCorrectaModal = preguntaEnModal?.opciones.find((o) => o.esCorrecta);
 
-    return (
-      <div className="space-y-5">
-        {barraPestanasSimulacro}
-        {/* BARRA SUPERIOR DE CONTROL DEL SIMULACRO OFICIAL UNIFICADO */}
-        <div className="bg-indigo-50/90 dark:bg-indigo-950/40 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-linear-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center text-lg shadow-xs shrink-0">
-              <i className="fa-solid fa-landmark-flag"></i>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-mono flex items-center gap-1">
-                  <i className="fa-solid fa-certificate text-[9px]"></i>
-                  <span>Test oficial</span>
-                </span>
-                <span
-                  className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-md border ${
-                    AMBITOS_INFO[simulacroActivo.ambito]?.badgeClass || ''
-                  }`}
-                >
-                  {AMBITOS_INFO[simulacroActivo.ambito]?.shortLabel || simulacroActivo.ambito}
-                </span>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                  1.ª Parte ({indicesP1Ord.length} ord.
-                  {indicesP1Res.length > 0 ? ` + ${indicesP1Res.length} res.` : ''}) + 2.ª Parte
-                  Supuesto ({indicesP2Ord.length} ord.
-                  {indicesP2Res.length > 0 ? ` + ${indicesP2Res.length} res.` : ''})
-                </span>
-              </div>
-              <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5">
-                {simulacroActivo.titulo}
-              </h2>
-            </div>
-          </div>
+    const claseEnunciadoModoLectura =
+      tamanoModoLectura === 'extra'
+        ? 'text-xl sm:text-2xl md:text-[27px] leading-relaxed'
+        : tamanoModoLectura === 'muy_grande'
+        ? 'text-lg sm:text-xl md:text-[23px] leading-relaxed'
+        : 'text-base sm:text-lg md:text-[20px] leading-relaxed';
 
-          {/* Controles de Tiempo (100 min modificables en vivo) y Finalización */}
-          <div className="flex items-center gap-2.5 flex-wrap w-full xl:w-auto justify-between xl:justify-end">
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-              <i
-                className={`fa-regular fa-clock text-sm ${
-                  segundosRestantes < 300
-                    ? 'text-rose-600 animate-pulse'
-                    : 'text-indigo-600 dark:text-indigo-400'
-                }`}
-              ></i>
-              <div className="text-left">
-                <span className="text-[9px] font-mono uppercase text-slate-400 block leading-none">
-                  Tiempo Restante ({duracionMinutos}m)
-                </span>
+    const claseOpcionModoLectura =
+      tamanoModoLectura === 'extra'
+        ? 'text-base sm:text-lg md:text-[20px] leading-relaxed'
+        : tamanoModoLectura === 'muy_grande'
+        ? 'text-sm sm:text-base md:text-[18px] leading-relaxed'
+        : 'text-sm sm:text-[16px] leading-relaxed';
+
+    const claseBadgeLetraModoLectura =
+      tamanoModoLectura === 'extra'
+        ? 'w-9 h-9 text-base rounded-xl'
+        : tamanoModoLectura === 'muy_grande'
+        ? 'w-8 h-8 text-sm rounded-xl'
+        : 'w-7 h-7 text-xs rounded-lg';
+
+    const claseRelatoModoLectura =
+      tamanoModoLectura === 'extra'
+        ? 'text-base sm:text-lg leading-relaxed'
+        : tamanoModoLectura === 'muy_grande'
+        ? 'text-sm sm:text-base leading-relaxed'
+        : 'text-xs sm:text-sm leading-relaxed';
+
+    return (
+      <div className={modoLectura ? 'max-w-4xl mx-auto w-full space-y-4 py-1' : 'space-y-5'}>
+        {!modoLectura && barraPestanasSimulacro}
+
+        {/* BARRA MINIMALISTA DE CONCENTRACIÓN EN MODO LECTURA */}
+        {modoLectura && (
+          <div className="bg-white/95 dark:bg-slate-900/95 border border-indigo-200 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xs font-black tracking-tight text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                <i className="fa-solid fa-book-open-reader text-indigo-600 dark:text-indigo-400"></i>
+                <span>Modo Lectura</span>
+              </span>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <select
+                value={indicePreguntaActual}
+                onChange={(e) => setIndicePreguntaActual(Number(e.target.value))}
+                aria-label="Seleccionar pregunta del simulacro"
+                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer max-w-[260px]"
+              >
+                {preguntasExtendidasActivas.map((p, idx) => {
+                  const r = respuestasUsuario[idx];
+                  const d = preguntasDudosas.has(idx);
+                  const esSup =
+                    p.bloqueSimulacro === 'parte2_ordinaria' || p.bloqueSimulacro === 'parte2_reserva';
+                  const etiqueta = p.esReserva
+                    ? `${esSup ? '2.ª Parte Reserva' : '1.ª Parte Reserva'} R${p.numeroReserva}`
+                    : `${esSup ? '2.ª Parte Supuesto' : '1.ª Parte Test'} #${p.numeroEnBloque}`;
+                  return (
+                    <option key={idx} value={idx}>
+                      {etiqueta}
+                      {r ? ` (${r})` : ''}
+                      {d ? ' · Dudosa' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+                {totalContestadas}/{totalPreguntas} respondidas
+              </span>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <div className="flex items-center gap-1.5 text-xs font-mono font-black">
+                <i
+                  className={`fa-regular fa-clock ${
+                    segundosRestantes < 300
+                      ? 'text-rose-600 animate-pulse'
+                      : 'text-indigo-600 dark:text-indigo-400'
+                  }`}
+                ></i>
                 <span
-                  className={`font-mono text-xs sm:text-sm font-black ${
+                  className={
                     segundosRestantes < 300
                       ? 'text-rose-600 dark:text-rose-400'
-                      : 'text-slate-900 dark:text-white'
-                  }`}
+                      : 'text-slate-800 dark:text-slate-200'
+                  }
                 >
                   {formatearReloj(segundosRestantes)}
                 </span>
-              </div>
-
-              {!simulacroFinalizado && (
-                <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200 dark:border-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => ajustarTiempoEnCurso(-5)}
-                    className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
-                    title="Restar 5 minutos a la duración"
-                  >
-                    -5m
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => ajustarTiempoEnCurso(5)}
-                    className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
-                    title="Añadir 5 minutos a la duración"
-                  >
-                    +5m
-                  </button>
+                {!simulacroFinalizado && (
                   <button
                     type="button"
                     onClick={() => setRelojPausado((p) => !p)}
-                    className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold cursor-pointer"
+                    className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] text-slate-600 dark:text-slate-300 cursor-pointer"
                     title={relojPausado ? 'Reanudar reloj' : 'Pausar reloj'}
                   >
                     <i className={`fa-solid ${relojPausado ? 'fa-play' : 'fa-pause'}`}></i>
                   </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {onCambiarTamanoModoLectura && (
+                <div
+                  className="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700"
+                  role="group"
+                  aria-label="Tamaño de fuente del Modo Lectura"
+                >
+                  {(
+                    [
+                      { id: 'grande', label: 'A', title: 'Fuente grande' },
+                      { id: 'muy_grande', label: 'A+', title: 'Fuente muy grande' },
+                      { id: 'extra', label: 'A++', title: 'Fuente extra grande' },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => onCambiarTamanoModoLectura(opt.id)}
+                      title={opt.title}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-mono font-black transition-all cursor-pointer ${
+                        tamanoModoLectura === opt.id
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => toggleDudosa(indicePreguntaActual)}
+                className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  preguntasDudosas.has(indicePreguntaActual)
+                    ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-400 font-black'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-amber-50'
+                }`}
+                title="Marcar o desmarcar pregunta como dudosa"
+              >
+                <i className="fa-regular fa-flag text-[10px]"></i>
+                <span>{preguntasDudosas.has(indicePreguntaActual) ? 'Dudosa' : 'Marcar dudosa'}</span>
+              </button>
+
+              {onToggleDarkMode && (
+                <button
+                  type="button"
+                  onClick={onToggleDarkMode}
+                  className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 cursor-pointer"
+                  title={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                >
+                  <i className={`fa-solid ${isDarkMode ? 'fa-sun text-amber-400' : 'fa-moon'} text-xs`}></i>
+                </button>
+              )}
+
+              {!simulacroFinalizado && (
+                <button
+                  type="button"
+                  onClick={solicitarEvaluarSimulacro}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-flag-checkered text-[10px]"></i>
+                  <span>Evaluar</span>
+                </button>
+              )}
+
+              {onToggleModoLectura && (
+                <button
+                  type="button"
+                  onClick={() => onToggleModoLectura(false)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-700 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-black transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Salir del Modo Lectura (Alt+L)"
+                >
+                  <i className="fa-solid fa-compress text-[10px]"></i>
+                  <span>Salir Modo Lectura</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* BARRA SUPERIOR DE CONTROL DEL SIMULACRO OFICIAL UNIFICADO (oculta en Modo Lectura) */}
+        {!modoLectura && (
+          <div className="bg-indigo-50/90 dark:bg-indigo-950/40 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-linear-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center text-lg shadow-xs shrink-0">
+                <i className="fa-solid fa-landmark-flag"></i>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-mono flex items-center gap-1">
+                    <i className="fa-solid fa-certificate text-[9px]"></i>
+                    <span>Test oficial</span>
+                  </span>
+                  <span
+                    className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-md border ${
+                      AMBITOS_INFO[simulacroActivo.ambito]?.badgeClass || ''
+                    }`}
+                  >
+                    {AMBITOS_INFO[simulacroActivo.ambito]?.shortLabel || simulacroActivo.ambito}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                    1.ª Parte ({indicesP1Ord.length} ord.
+                    {indicesP1Res.length > 0 ? ` + ${indicesP1Res.length} res.` : ''}) + 2.ª Parte
+                    Supuesto ({indicesP2Ord.length} ord.
+                    {indicesP2Res.length > 0 ? ` + ${indicesP2Res.length} res.` : ''})
+                  </span>
+                </div>
+                <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5">
+                  {simulacroActivo.titulo}
+                </h2>
+              </div>
+            </div>
+
+            {/* Controles de Tiempo (100 min modificables en vivo) y Finalización */}
+            <div className="flex items-center gap-2.5 flex-wrap w-full xl:w-auto justify-between xl:justify-end">
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <i
+                  className={`fa-regular fa-clock text-sm ${
+                    segundosRestantes < 300
+                      ? 'text-rose-600 animate-pulse'
+                      : 'text-indigo-600 dark:text-indigo-400'
+                  }`}
+                ></i>
+                <div className="text-left">
+                  <span className="text-[9px] font-mono uppercase text-slate-400 block leading-none">
+                    Tiempo Restante ({duracionMinutos}m)
+                  </span>
+                  <span
+                    className={`font-mono text-xs sm:text-sm font-black ${
+                      segundosRestantes < 300
+                        ? 'text-rose-600 dark:text-rose-400'
+                        : 'text-slate-900 dark:text-white'
+                    }`}
+                  >
+                    {formatearReloj(segundosRestantes)}
+                  </span>
+                </div>
+
+                {!simulacroFinalizado && (
+                  <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => ajustarTiempoEnCurso(-5)}
+                      className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
+                      title="Restar 5 minutos a la duración"
+                    >
+                      -5m
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => ajustarTiempoEnCurso(5)}
+                      className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
+                      title="Añadir 5 minutos a la duración"
+                    >
+                      +5m
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRelojPausado((p) => !p)}
+                      className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-bold cursor-pointer"
+                      title={relojPausado ? 'Reanudar reloj' : 'Pausar reloj'}
+                    >
+                      <i className={`fa-solid ${relojPausado ? 'fa-play' : 'fa-pause'}`}></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+                {totalContestadas} / {totalPreguntas} contestadas
+              </span>
+
+              {onToggleModoLectura && (
+                <button
+                  type="button"
+                  onClick={() => onToggleModoLectura(true)}
+                  className="px-3 py-2 rounded-xl bg-indigo-100/90 dark:bg-indigo-950/80 hover:bg-indigo-200 border border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-300 text-xs font-black shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Activar Modo Lectura sin distracciones con fuente ampliada y centrada (Alt+L)"
+                >
+                  <i className="fa-solid fa-book-open-reader text-indigo-600 dark:text-indigo-400"></i>
+                  <span>Modo Lectura</span>
+                </button>
+              )}
+
+              {onExportarExamenPDF && (
+                <button
+                  type="button"
+                  onClick={() => onExportarExamenPDF(simulacroActivo)}
+                  className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 text-xs font-black shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Exportar Simulacro Oficial completo (1.ª Parte + Supuesto + Reservas) en PDF oficial + Plantilla de hoja de respuestas en blanco"
+                >
+                  <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400"></i>
+                  <span>Exportar PDF</span>
+                </button>
+              )}
+
+              {!simulacroFinalizado ? (
+                <button
+                  type="button"
+                  onClick={solicitarEvaluarSimulacro}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <i className="fa-solid fa-flag-checkered"></i>
+                  <span>Evaluar y Calificar Simulacro</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onIrAHistorial}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <i className="fa-solid fa-table-list"></i>
+                    <span>Ver en Historial</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (modoLectura && onToggleModoLectura) onToggleModoLectura(false);
+                      setSimulacroActivo(null);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Nuevo Simulacro Oficial
+                  </button>
                 </div>
               )}
             </div>
-
-            <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
-              {totalContestadas} / {totalPreguntas} contestadas
-            </span>
-
-            {onExportarExamenPDF && (
-              <button
-                type="button"
-                onClick={() => onExportarExamenPDF(simulacroActivo)}
-                className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 text-xs font-black shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Exportar Simulacro Oficial completo (1.ª Parte + Supuesto + Reservas) en PDF oficial + Plantilla de hoja de respuestas en blanco"
-              >
-                <i className="fa-solid fa-file-pdf text-rose-600 dark:text-rose-400"></i>
-                <span>Exportar PDF</span>
-              </button>
-            )}
-
-            {!simulacroFinalizado ? (
-              <button
-                type="button"
-                onClick={solicitarEvaluarSimulacro}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <i className="fa-solid fa-flag-checkered"></i>
-                <span>Evaluar y Calificar Simulacro</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onIrAHistorial}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <i className="fa-solid fa-table-list"></i>
-                  <span>Ver en Historial</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSimulacroActivo(null)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer"
-                >
-                  Nuevo Simulacro Oficial
-                </button>
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
-        {/* RESUMEN DE CALIFICACIÓN OFICIAL SEGMENTADA */}
-        {simulacroFinalizado && simulacroActivo.resultado && (
+        {/* RESUMEN DE CALIFICACIÓN OFICIAL SEGMENTADA (oculto en Modo Lectura) */}
+        {!modoLectura && simulacroFinalizado && simulacroActivo.resultado && (
           <div className="bg-linear-to-br from-indigo-50/90 via-white to-emerald-50/70 dark:from-indigo-950/40 dark:via-slate-800 dark:to-emerald-950/30 border-2 border-indigo-300 dark:border-indigo-700 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-200/70 dark:border-slate-700 pb-3">
               <div className="flex items-center gap-3">
@@ -2118,146 +2344,150 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
           </div>
         )}
 
-        {/* MAPA NAVEGADOR DE LAS DOS PARTES Y SUS PREGUNTAS DE RESERVA */}
-        <div className="bg-sky-50/85 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-800 rounded-2xl p-4 shadow-sm space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setIndicePreguntaActual(0)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                  !esPreguntaSupuesto
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <i className="fa-solid fa-list-check"></i>
-                <span>
-                  1.ª Parte: Cuestionario ({indicesP1Ord.length} ord.
-                  {indicesP1Res.length > 0 ? ` + ${indicesP1Res.length} reserva` : ''})
-                </span>
-              </button>
+        {/* MAPA NAVEGADOR DE LAS DOS PARTES Y SUS PREGUNTAS DE RESERVA (oculto en Modo Lectura) */}
+        {!modoLectura && (
+          <div className="bg-sky-50/85 dark:bg-slate-800 border-2 border-sky-300 dark:border-sky-800 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setIndicePreguntaActual(0)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
+                    !esPreguntaSupuesto
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <i className="fa-solid fa-list-check"></i>
+                  <span>
+                    1.ª Parte: Cuestionario ({indicesP1Ord.length} ord.
+                    {indicesP1Res.length > 0 ? ` + ${indicesP1Res.length} reserva` : ''})
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setIndicePreguntaActual(primerIndiceSupuesto)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                  esPreguntaSupuesto
-                    ? 'bg-amber-500 text-slate-950 shadow-2xs'
-                    : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <i className="fa-solid fa-briefcase"></i>
-                <span>
-                  2.ª Parte: Supuesto Práctico ({indicesP2Ord.length} ord.
-                  {indicesP2Res.length > 0 ? ` + ${indicesP2Res.length} reserva` : ''})
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIndicePreguntaActual(primerIndiceSupuesto)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
+                    esPreguntaSupuesto
+                      ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                      : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <i className="fa-solid fa-briefcase"></i>
+                  <span>
+                    2.ª Parte: Supuesto Práctico ({indicesP2Ord.length} ord.
+                    {indicesP2Res.length > 0 ? ` + ${indicesP2Res.length} reserva` : ''})
+                  </span>
+                </button>
+              </div>
+
+              <span className="text-[11px] font-mono text-slate-500">
+                {preguntaActual.esReserva ? (
+                  <strong className="text-purple-600 dark:text-purple-400">
+                    Pregunta de Reserva R{preguntaActual.numeroReserva} (
+                    {esPreguntaSupuesto ? 'Supuesto' : 'Test 1.ª Parte'})
+                  </strong>
+                ) : (
+                  <strong className="text-indigo-600 dark:text-indigo-400">
+                    {esPreguntaSupuesto
+                      ? `2.ª Parte · Supuesto (Preg. ${preguntaActual.numeroEnBloque} de ${indicesP2Ord.length})`
+                      : `1.ª Parte · Cuestionario (Preg. ${preguntaActual.numeroEnBloque} de ${indicesP1Ord.length})`}
+                  </strong>
+                )}
+              </span>
             </div>
 
-            <span className="text-[11px] font-mono text-slate-500">
-              {preguntaActual.esReserva ? (
-                <strong className="text-purple-600 dark:text-purple-400">
-                  Pregunta de Reserva R{preguntaActual.numeroReserva} (
-                  {esPreguntaSupuesto ? 'Supuesto' : 'Test 1.ª Parte'})
-                </strong>
-              ) : (
-                <strong className="text-indigo-600 dark:text-indigo-400">
-                  {esPreguntaSupuesto
-                    ? `2.ª Parte · Supuesto (Preg. ${preguntaActual.numeroEnBloque} de ${indicesP2Ord.length})`
-                    : `1.ª Parte · Cuestionario (Preg. ${preguntaActual.numeroEnBloque} de ${indicesP1Ord.length})`}
-                </strong>
-              )}
-            </span>
-          </div>
+            {/* Rejilla de números de pregunta (Ordinarias + Reservas de Test + Ordinarias Supuesto + Reservas de Supuesto) */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {preguntasExtendidasActivas.map((p, idx) => {
+                const resp = respuestasUsuario[idx];
+                const corr = p.opciones.find((o) => o.esCorrecta)?.id;
+                const esDudosa = preguntasDudosas.has(idx);
+                const esAnulada = preguntasAnuladasIndices.has(idx);
+                const evaluada =
+                  simulacroFinalizado || (modalidadCorreccion === 'paso_a_paso' && Boolean(resp));
+                const esDeSupuesto =
+                  p.bloqueSimulacro === 'parte2_ordinaria' || p.bloqueSimulacro === 'parte2_reserva';
 
-          {/* Rejilla de números de pregunta (Ordinarias + Reservas de Test + Ordinarias Supuesto + Reservas de Supuesto) */}
-          <div className="flex items-center gap-1 flex-wrap">
-            {preguntasExtendidasActivas.map((p, idx) => {
-              const resp = respuestasUsuario[idx];
-              const corr = p.opciones.find((o) => o.esCorrecta)?.id;
-              const esDudosa = preguntasDudosas.has(idx);
-              const esAnulada = preguntasAnuladasIndices.has(idx);
-              const evaluada =
-                simulacroFinalizado || (modalidadCorreccion === 'paso_a_paso' && Boolean(resp));
-              const esDeSupuesto =
-                p.bloqueSimulacro === 'parte2_ordinaria' || p.bloqueSimulacro === 'parte2_reserva';
-
-              let estiloBoton = p.esReserva
-                ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-800'
-                : esDeSupuesto
-                ? 'bg-amber-50/80 dark:bg-amber-950/30 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-800'
-                : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
-
-              if (esAnulada) {
-                estiloBoton =
-                  'bg-slate-300 dark:bg-slate-700 text-slate-500 line-through border-slate-400 opacity-60';
-              } else if (evaluada && resp) {
-                estiloBoton =
-                  resp === corr
-                    ? 'bg-emerald-600 text-white border-emerald-700 font-black'
-                    : 'bg-rose-600 text-white border-rose-700 font-black';
-              } else if (resp) {
-                estiloBoton = p.esReserva
-                  ? 'bg-purple-600 text-white border-purple-700 font-black'
+                let estiloBoton = p.esReserva
+                  ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-800'
                   : esDeSupuesto
-                  ? 'bg-amber-500 text-slate-950 border-amber-600 font-black'
-                  : 'bg-indigo-600 text-white border-indigo-700 font-black';
-              }
+                  ? 'bg-amber-50/80 dark:bg-amber-950/30 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                  : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
 
-              const mostrarSeparadorReservaP1 =
-                p.bloqueSimulacro === 'parte1_reserva' && p.numeroEnBloque === 1;
-              const mostrarSeparadorSupuesto =
-                p.bloqueSimulacro === 'parte2_ordinaria' && p.numeroEnBloque === 1;
-              const mostrarSeparadorReservaP2 =
-                p.bloqueSimulacro === 'parte2_reserva' && p.numeroEnBloque === 1;
+                if (esAnulada) {
+                  estiloBoton =
+                    'bg-slate-300 dark:bg-slate-700 text-slate-500 line-through border-slate-400 opacity-60';
+                } else if (evaluada && resp) {
+                  estiloBoton =
+                    resp === corr
+                      ? 'bg-emerald-600 text-white border-emerald-700 font-black'
+                      : 'bg-rose-600 text-white border-rose-700 font-black';
+                } else if (resp) {
+                  estiloBoton = p.esReserva
+                    ? 'bg-purple-600 text-white border-purple-700 font-black'
+                    : esDeSupuesto
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 font-black'
+                    : 'bg-indigo-600 text-white border-indigo-700 font-black';
+                }
 
-              return (
-                <React.Fragment key={idx}>
-                  {mostrarSeparadorReservaP1 && (
-                    <span className="px-2 py-0.5 text-[9.5px] font-mono font-black uppercase bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 rounded-md border border-purple-300 dark:border-purple-800 mx-1">
-                      Reserva Test ({indicesP1Res.length}):
-                    </span>
-                  )}
-                  {mostrarSeparadorSupuesto && (
-                    <span className="px-2 py-0.5 text-[9.5px] font-mono font-black uppercase bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-md border border-amber-300 dark:border-amber-800 mx-1">
-                      Supuesto ({indicesP2Ord.length}):
-                    </span>
-                  )}
-                  {mostrarSeparadorReservaP2 && (
-                    <span className="px-2 py-0.5 text-[9.5px] font-mono font-black uppercase bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 rounded-md border border-purple-300 dark:border-purple-800 mx-1">
-                      Reserva Sup. ({indicesP2Res.length}):
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setIndicePreguntaActual(idx)}
-                    className={`h-7 min-w-7 px-1.5 rounded-lg border text-[11px] font-mono transition-all cursor-pointer relative ${estiloBoton} ${
-                      indicePreguntaActual === idx
-                        ? 'ring-2 ring-offset-1 ring-indigo-500 scale-105'
-                        : ''
-                    }`}
-                    title={
-                      p.esReserva
-                        ? `Pregunta de Reserva R${p.numeroReserva} (${
-                            esDeSupuesto ? 'Supuesto' : 'Test'
-                          })`
-                        : `Pregunta Ordinaria #${p.numeroEnBloque}`
-                    }
-                  >
-                    {p.esReserva ? `R${p.numeroReserva}` : p.numeroEnBloque}
-                    {esDudosa && (
-                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-white"></span>
+                const mostrarSeparadorReservaP1 =
+                  p.bloqueSimulacro === 'parte1_reserva' && p.numeroEnBloque === 1;
+                const mostrarSeparadorSupuesto =
+                  p.bloqueSimulacro === 'parte2_ordinaria' && p.numeroEnBloque === 1;
+                const mostrarSeparadorReservaP2 =
+                  p.bloqueSimulacro === 'parte2_reserva' && p.numeroEnBloque === 1;
+
+                return (
+                  <React.Fragment key={idx}>
+                    {mostrarSeparadorReservaP1 && (
+                      <span className="px-2 py-0.5 text-[9.5px] font-mono font-black uppercase bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 rounded-md border border-purple-300 dark:border-purple-800 mx-1">
+                        Reserva Test ({indicesP1Res.length}):
+                      </span>
                     )}
-                  </button>
-                </React.Fragment>
-              );
-            })}
+                    {mostrarSeparadorSupuesto && (
+                      <span className="px-2 py-0.5 text-[9.5px] font-mono font-black uppercase bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-md border border-amber-300 dark:border-amber-800 mx-1">
+                        Supuesto ({indicesP2Ord.length}):
+                      </span>
+                    )}
+                    {mostrarSeparadorReservaP2 && (
+                      <span className="px-2 py-0.5 text-[9.5px] font-mono font-black uppercase bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 rounded-md border border-purple-300 dark:border-purple-800 mx-1">
+                        Reserva Sup. ({indicesP2Res.length}):
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIndicePreguntaActual(idx)}
+                      className={`h-7 min-w-7 px-1.5 rounded-lg border text-[11px] font-mono transition-all cursor-pointer relative ${estiloBoton} ${
+                        indicePreguntaActual === idx
+                          ? 'ring-2 ring-offset-1 ring-indigo-500 scale-105'
+                          : ''
+                      }`}
+                      title={
+                        p.esReserva
+                          ? `Pregunta de Reserva R${p.numeroReserva} (${
+                              esDeSupuesto ? 'Supuesto' : 'Test'
+                            })`
+                          : `Pregunta Ordinaria #${p.numeroEnBloque}`
+                      }
+                    >
+                      {p.esReserva ? `R${p.numeroReserva}` : p.numeroEnBloque}
+                      {esDudosa && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-white"></span>
+                      )}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* RELATO FÁCTICO DEL SUPUESTO PRÁCTICO */}
-        {(esPreguntaSupuesto || simulacroActivo.contextoCaso) && (
+        {(modoLectura
+          ? Boolean(esPreguntaSupuesto && simulacroActivo.contextoCaso)
+          : Boolean(esPreguntaSupuesto || simulacroActivo.contextoCaso)) && (
           <div
             className={`rounded-2xl border-2 p-4 sm:p-5 transition-all ${
               esPreguntaSupuesto
@@ -2268,8 +2498,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-amber-500 text-slate-950 font-mono text-[10px] font-black uppercase">
-                  2.ª Parte · Supuesto Práctico (20 ord.
-                  {indicesP2Res.length > 0 ? ` + ${indicesP2Res.length} reserva` : ''})
+                  2.ª Parte · Supuesto Práctico
                 </span>
                 <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
                   {supuestoActivoInfo?.titulo || 'Relato Fáctico del Caso Administrativo'}
@@ -2292,7 +2521,11 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
             </div>
 
             {mostrarRelatoSupuestoEnPregunta && (
-              <div className="mt-3 pt-3 border-t border-amber-200/70 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line font-medium">
+              <div
+                className={`mt-3 pt-3 border-t border-amber-200/70 dark:border-slate-700 text-slate-800 dark:text-slate-200 whitespace-pre-line font-medium ${
+                  modoLectura ? `max-w-3xl mx-auto text-center ${claseRelatoModoLectura}` : 'text-xs sm:text-sm leading-relaxed'
+                }`}
+              >
                 {simulacroActivo.contextoCaso}
               </div>
             )}
@@ -2301,192 +2534,268 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
 
         {/* TARJETA DE LA PREGUNTA ACTUAL */}
         {preguntaActual && (
-          <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-mono">
+          <div
+            className={
+              modoLectura
+                ? 'bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-3xl px-6 sm:px-12 py-8 sm:py-11 shadow-lg min-h-[480px] flex flex-col justify-between gap-7'
+                : 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4'
+            }
+          >
+            {modoLectura ? (
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-slate-500 dark:text-slate-400 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span className="font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                   {preguntaActual.esReserva
-                    ? `PREGUNTA DE RESERVA R${preguntaActual.numeroReserva}`
-                    : `PREGUNTA #${preguntaActual.numeroEnBloque}`}
-                </span>
-
-                <span
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black border ${
-                    preguntaActual.esReserva
-                      ? 'bg-purple-100 dark:bg-purple-950 text-purple-900 dark:text-purple-300 border-purple-300 dark:border-purple-800'
-                      : esPreguntaSupuesto
-                      ? 'bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-800'
-                      : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                  }`}
-                >
-                  {preguntaActual.esReserva
-                    ? `RESERVA OFICIAL R${preguntaActual.numeroReserva} (${
-                        esPreguntaSupuesto ? 'SUPUESTO' : 'TEST 1.ª PARTE'
+                    ? `RESERVA R${preguntaActual.numeroReserva} (${
+                        esPreguntaSupuesto ? '2.ª PARTE SUPUESTO' : '1.ª PARTE TEST'
                       })`
                     : esPreguntaSupuesto
-                    ? `SUPUESTO · PREG. ${preguntaActual.numeroEnBloque} DE ${indicesP2Ord.length}`
-                    : `1.ª PARTE · PREG. ${preguntaActual.numeroEnBloque} DE ${indicesP1Ord.length}`}
+                    ? `2.ª PARTE SUPUESTO · PREGUNTA #${preguntaActual.numeroEnBloque} DE ${indicesP2Ord.length}`
+                    : `1.ª PARTE TEST · PREGUNTA #${preguntaActual.numeroEnBloque} DE ${indicesP1Ord.length}`}
                 </span>
-
-                {(() => {
-                  const refConvSim = obtenerReferenciaConvocatoriaOficial(preguntaActual, simulacroActivo);
-                  if (refConvSim) {
-                    return (
-                      <span
-                        className="px-2.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-mono font-black flex items-center gap-1.5"
-                        title={`Pregunta procedente de convocatoria oficial: ${refConvSim}`}
-                      >
-                        <i className="fa-solid fa-landmark-flag text-amber-600 dark:text-amber-400 text-[9px]"></i>
-                        <span>{formatearBadgeConvocatoriaOficial(refConvSim)}</span>
-                      </span>
-                    );
-                  }
-                  return (
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px] font-mono font-black flex items-center gap-1">
-                      <i className="fa-solid fa-shield-halved text-[9px]"></i>
-                      <span>100% INÉDITA · {preguntaActual.codigoInedita}</span>
-                    </span>
-                  );
-                })()}
-
-                {respActual && !simulacroFinalizado && (
-                  <button
-                    type="button"
-                    onClick={() => handleDesmarcarPregunta(indicePreguntaActual)}
-                    className="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-slate-700 dark:text-slate-200 hover:text-rose-600 border border-slate-300 dark:border-slate-600 text-[10px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <i className="fa-solid fa-eraser text-[9px]"></i>
-                    <span>DESMARCAR ({respActual})</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => toggleDudosa(indicePreguntaActual)}
-                  className={`px-2.5 py-0.5 rounded-md border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    preguntasDudosas.has(indicePreguntaActual)
-                      ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-400 font-black'
-                      : 'bg-amber-50/60 dark:bg-slate-800 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-slate-700 hover:bg-amber-100'
-                  }`}
-                >
-                  <i className="fa-regular fa-flag text-[9px]"></i>
-                  <span>{preguntasDudosas.has(indicePreguntaActual) ? 'DUDOSA MARCADA' : 'Dudosa'}</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                {!preguntaActual.esReserva && !simulacroFinalizado && (
-                  <button
-                    type="button"
-                    onClick={() => toggleAnularPreguntaOrdinaria(indicePreguntaActual)}
-                    className={`px-2.5 py-0.5 rounded-md border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      preguntasAnuladasIndices.has(indicePreguntaActual)
-                        ? 'bg-rose-600 text-white border-rose-700 font-black'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-rose-400'
-                    }`}
-                    title="Anular pregunta ordinaria para que sea sustituida por la siguiente pregunta de reserva disponible"
-                  >
-                    <i className="fa-solid fa-ban text-[9px]"></i>
-                    <span>
-                      {preguntasAnuladasIndices.has(indicePreguntaActual)
-                        ? 'ANULADA (Sustituida por Reserva)'
-                        : 'Marcar como ANULADA (Tribunal)'}
-                    </span>
-                  </button>
-                )}
-
-                <span className="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold">
+                <span>·</span>
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
                   {obtenerNormaEfectivaDePregunta(preguntaActual, simulacroActivo)}
                 </span>
+                {respActual && !simulacroFinalizado && (
+                  <>
+                    <span>·</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDesmarcarPregunta(indicePreguntaActual)}
+                      className="text-rose-600 dark:text-rose-400 hover:underline font-bold cursor-pointer"
+                    >
+                      Desmarcar ({respActual})
+                    </button>
+                  </>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-mono">
+                    {preguntaActual.esReserva
+                      ? `PREGUNTA DE RESERVA R${preguntaActual.numeroReserva}`
+                      : `PREGUNTA #${preguntaActual.numeroEnBloque}`}
+                  </span>
 
-            {/* Enunciado */}
-            <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-relaxed">
-              {preguntaActual.enunciado}
-            </p>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black border ${
+                      preguntaActual.esReserva
+                        ? 'bg-purple-100 dark:bg-purple-950 text-purple-900 dark:text-purple-300 border-purple-300 dark:border-purple-800'
+                        : esPreguntaSupuesto
+                        ? 'bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                        : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                    }`}
+                  >
+                    {preguntaActual.esReserva
+                      ? `RESERVA OFICIAL R${preguntaActual.numeroReserva} (${
+                          esPreguntaSupuesto ? 'SUPUESTO' : 'TEST 1.ª PARTE'
+                        })`
+                      : esPreguntaSupuesto
+                      ? `SUPUESTO · PREG. ${preguntaActual.numeroEnBloque} DE ${indicesP2Ord.length}`
+                      : `1.ª PARTE · PREG. ${preguntaActual.numeroEnBloque} DE ${indicesP1Ord.length}`}
+                  </span>
 
-            {/* Opciones A, B, C, D (altura invariable, colores atenuados, visado verde ✓ y aspa roja ✗) */}
-            <div className="space-y-2.5 pt-1">
-              {preguntaActual.opciones.map((opc) => {
-                const seleccionada = respActual === opc.id;
-                let claseCaja =
-                  'border-slate-300 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/70 hover:bg-indigo-50/40 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200';
-                let claseLetra =
-                  'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200';
-                let indicadorDerecha: React.ReactNode = null;
+                  {(() => {
+                    const refConvSim = obtenerReferenciaConvocatoriaOficial(preguntaActual, simulacroActivo);
+                    if (refConvSim) {
+                      return (
+                        <span
+                          className="px-2.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-mono font-black flex items-center gap-1.5"
+                          title={`Pregunta procedente de convocatoria oficial: ${refConvSim}`}
+                        >
+                          <i className="fa-solid fa-landmark-flag text-amber-600 dark:text-amber-400 text-[9px]"></i>
+                          <span>{formatearBadgeConvocatoriaOficial(refConvSim)}</span>
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px] font-mono font-black flex items-center gap-1">
+                        <i className="fa-solid fa-shield-halved text-[9px]"></i>
+                        <span>100% INÉDITA · {preguntaActual.codigoInedita}</span>
+                      </span>
+                    );
+                  })()}
 
-                if (mostrarCorreccion) {
-                  if (opc.esCorrecta) {
+                  {respActual && !simulacroFinalizado && (
+                    <button
+                      type="button"
+                      onClick={() => handleDesmarcarPregunta(indicePreguntaActual)}
+                      className="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-slate-700 dark:text-slate-200 hover:text-rose-600 border border-slate-300 dark:border-slate-600 text-[10px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <i className="fa-solid fa-eraser text-[9px]"></i>
+                      <span>DESMARCAR ({respActual})</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => toggleDudosa(indicePreguntaActual)}
+                    className={`px-2.5 py-0.5 rounded-md border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      preguntasDudosas.has(indicePreguntaActual)
+                        ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-400 font-black'
+                        : 'bg-amber-50/60 dark:bg-slate-800 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-slate-700 hover:bg-amber-100'
+                    }`}
+                  >
+                    <i className="fa-regular fa-flag text-[9px]"></i>
+                    <span>{preguntasDudosas.has(indicePreguntaActual) ? 'DUDOSA MARCADA' : 'Dudosa'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {onToggleModoLectura && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleModoLectura(true)}
+                      className="px-2.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-mono font-black cursor-pointer flex items-center gap-1"
+                      title="Activar Modo Lectura centrado (Alt+L)"
+                    >
+                      <i className="fa-solid fa-book-open-reader text-[9px]"></i>
+                      <span>Modo Lectura</span>
+                    </button>
+                  )}
+
+                  {!preguntaActual.esReserva && !simulacroFinalizado && (
+                    <button
+                      type="button"
+                      onClick={() => toggleAnularPreguntaOrdinaria(indicePreguntaActual)}
+                      className={`px-2.5 py-0.5 rounded-md border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        preguntasAnuladasIndices.has(indicePreguntaActual)
+                          ? 'bg-rose-600 text-white border-rose-700 font-black'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-rose-400'
+                      }`}
+                      title="Anular pregunta ordinaria para que sea sustituida por la siguiente pregunta de reserva disponible"
+                    >
+                      <i className="fa-solid fa-ban text-[9px]"></i>
+                      <span>
+                        {preguntasAnuladasIndices.has(indicePreguntaActual)
+                          ? 'ANULADA (Sustituida por Reserva)'
+                          : 'Marcar como ANULADA (Tribunal)'}
+                      </span>
+                    </button>
+                  )}
+
+                  <span className="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold">
+                    {obtenerNormaEfectivaDePregunta(preguntaActual, simulacroActivo)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Cuerpo central: Enunciado y Opciones A, B, C, D */}
+            <div className={modoLectura ? 'space-y-7 my-auto' : 'space-y-4'}>
+              <p
+                className={
+                  modoLectura
+                    ? `max-w-3xl mx-auto w-full text-center font-bold text-slate-900 dark:text-white ${claseEnunciadoModoLectura}`
+                    : 'text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-relaxed'
+                }
+              >
+                {preguntaActual.enunciado}
+              </p>
+
+              {/* Opciones A, B, C, D (altura invariable, colores atenuados, visado verde ✓ y aspa roja ✗) */}
+              <div className={modoLectura ? 'max-w-3xl mx-auto w-full space-y-3.5' : 'space-y-2.5 pt-1'}>
+                {preguntaActual.opciones.map((opc) => {
+                  const seleccionada = respActual === opc.id;
+                  let claseCaja =
+                    'border-slate-300 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/70 hover:bg-indigo-50/40 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200';
+                  let claseLetra =
+                    'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200';
+                  let indicadorDerecha: React.ReactNode = null;
+
+                  if (mostrarCorreccion) {
+                    if (opc.esCorrecta) {
+                      claseCaja =
+                        'border-emerald-300/85 dark:border-emerald-800/70 bg-emerald-50/45 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100';
+                      claseLetra =
+                        'bg-emerald-100/85 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200';
+                      indicadorDerecha = (
+                        <span
+                          className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"
+                          title="Respuesta acertada / correcta"
+                        >
+                          <i className="fa-solid fa-check text-xs"></i>
+                        </span>
+                      );
+                    } else if (seleccionada && !opc.esCorrecta) {
+                      claseCaja =
+                        'border-rose-300/85 dark:border-rose-800/70 bg-rose-50/45 dark:bg-rose-950/20 text-slate-900 dark:text-slate-100';
+                      claseLetra =
+                        'bg-rose-100/85 dark:bg-rose-900/50 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200';
+                      indicadorDerecha = (
+                        <span
+                          className="h-6 w-6 rounded-full bg-rose-100 dark:bg-rose-900/60 border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 flex items-center justify-center"
+                          title="Respuesta incorrecta"
+                        >
+                          <i className="fa-solid fa-xmark text-xs"></i>
+                        </span>
+                      );
+                    } else {
+                      claseCaja =
+                        'border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400';
+                    }
+                  } else if (seleccionada) {
                     claseCaja =
-                      'border-emerald-300/85 dark:border-emerald-800/70 bg-emerald-50/45 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100';
-                    claseLetra =
-                      'bg-emerald-100/85 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200';
+                      'border-indigo-400 dark:border-indigo-600 bg-indigo-50/55 dark:bg-indigo-950/35 text-slate-900 dark:text-slate-100 ring-1 ring-indigo-400/50';
+                    claseLetra = 'bg-indigo-600 border border-indigo-600 text-white';
                     indicadorDerecha = (
                       <span
-                        className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"
-                        title="Respuesta acertada / correcta"
+                        className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"
+                        title="Opción seleccionada"
                       >
                         <i className="fa-solid fa-check text-xs"></i>
                       </span>
                     );
-                  } else if (seleccionada && !opc.esCorrecta) {
-                    claseCaja =
-                      'border-rose-300/85 dark:border-rose-800/70 bg-rose-50/45 dark:bg-rose-950/20 text-slate-900 dark:text-slate-100';
-                    claseLetra =
-                      'bg-rose-100/85 dark:bg-rose-900/50 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200';
-                    indicadorDerecha = (
-                      <span
-                        className="h-6 w-6 rounded-full bg-rose-100 dark:bg-rose-900/60 border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 flex items-center justify-center"
-                        title="Respuesta incorrecta"
-                      >
-                        <i className="fa-solid fa-xmark text-xs"></i>
-                      </span>
-                    );
-                  } else {
-                    claseCaja =
-                      'border-slate-200 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400';
                   }
-                } else if (seleccionada) {
-                  claseCaja =
-                    'border-indigo-400 dark:border-indigo-600 bg-indigo-50/55 dark:bg-indigo-950/35 text-slate-900 dark:text-slate-100 ring-1 ring-indigo-400/50';
-                  claseLetra = 'bg-indigo-600 border border-indigo-600 text-white';
-                  indicadorDerecha = (
-                    <span
-                      className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"
-                      title="Opción seleccionada"
-                    >
-                      <i className="fa-solid fa-check text-xs"></i>
-                    </span>
-                  );
-                }
 
-                return (
-                  <div
-                    key={opc.id}
-                    onClick={() => handleSeleccionarOpcion(indicePreguntaActual, opc.id)}
-                    className={`p-3.5 rounded-xl border transition-colors cursor-pointer flex items-start justify-between gap-3 ${claseCaja}`}
-                  >
-                    <div className="flex items-start gap-3 flex-1">
-                      <span
-                        className={`w-6 h-6 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${claseLetra}`}
-                      >
-                        {opc.id}
-                      </span>
-                      <span className="text-xs sm:text-sm font-medium leading-snug block py-0.5">
-                        {opc.texto}
-                      </span>
+                  return (
+                    <div
+                      key={opc.id}
+                      onClick={() => handleSeleccionarOpcion(indicePreguntaActual, opc.id)}
+                      className={`${
+                        modoLectura ? 'px-5 py-4 rounded-2xl border-2 items-center' : 'p-3.5 rounded-xl border items-start'
+                      } transition-colors cursor-pointer flex justify-between gap-3.5 ${claseCaja}`}
+                    >
+                      {modoLectura ? (
+                        <>
+                          <span
+                            className={`${claseBadgeLetraModoLectura} font-mono font-black flex items-center justify-center shrink-0 ${claseLetra}`}
+                          >
+                            {opc.id}
+                          </span>
+                          <span className={`flex-1 text-center font-medium block ${claseOpcionModoLectura}`}>
+                            {opc.texto}
+                          </span>
+                          <span className="h-7 w-7 shrink-0 flex items-center justify-center">
+                            {indicadorDerecha}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-start gap-3 flex-1">
+                            <span
+                              className={`w-6 h-6 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${claseLetra}`}
+                            >
+                              {opc.id}
+                            </span>
+                            <span className="text-xs sm:text-sm font-medium leading-snug block py-0.5">
+                              {opc.texto}
+                            </span>
+                          </div>
+                          <span className="h-6 w-6 shrink-0 mt-0.5 flex items-center justify-center">
+                            {indicadorDerecha}
+                          </span>
+                        </>
+                      )}
                     </div>
-                    <span className="h-6 w-6 shrink-0 mt-0.5 flex items-center justify-center">
-                      {indicadorDerecha}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Navegación Anterior / Siguiente + Acceso a Ventana Justificación sin variar altura */}
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
               <button
                 type="button"
                 disabled={indicePreguntaActual === 0}
@@ -2509,7 +2818,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
                     <span>Justificación</span>
                   </button>
                 )}
-                {!esPreguntaSupuesto && primerIndiceSupuesto > 0 && (
+                {!modoLectura && !esPreguntaSupuesto && primerIndiceSupuesto > 0 && (
                   <button
                     type="button"
                     onClick={() => setIndicePreguntaActual(primerIndiceSupuesto)}

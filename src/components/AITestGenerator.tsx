@@ -24,7 +24,12 @@ import {
   calcularResultadoExamenConReservas,
   asegurarSeparacionYNormativaReserva,
   obtenerRecursosArgumentacionDePregunta,
+  guardarEnLocalStorageSeguro,
 } from '../utils/jsonExamHelper';
+import {
+  leerDatoPersistenteSincrono,
+  eliminarDeIndexedDB,
+} from '../utils/idbPersistentStore';
 import { generarBancoPreguntasBOE } from '../constants/boeQuestionsBank';
 import { SelectorLeyesEInformaticaModal } from './SelectorLeyesEInformaticaModal';
 import { ConfirmarEvaluacionModal } from './ConfirmarEvaluacionModal';
@@ -52,6 +57,12 @@ interface AITestGeneratorProps {
   itemsAlmacenDudas?: ItemAlmacenDuda[];
   onGuardarEnAlmacenDudas?: (item: ItemAlmacenDuda) => void;
   onExportarExamenPDF?: (examen: ExamenCompleto) => void;
+  modoLectura?: boolean;
+  onToggleModoLectura?: (forzarValor?: boolean) => void;
+  tamanoModoLectura?: 'grande' | 'muy_grande' | 'extra';
+  onCambiarTamanoModoLectura?: (tamano: 'grande' | 'muy_grande' | 'extra') => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
 }
 
 export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
@@ -64,6 +75,12 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   itemsAlmacenDudas = [],
   onGuardarEnAlmacenDudas,
   onExportarExamenPDF,
+  modoLectura = false,
+  onToggleModoLectura,
+  tamanoModoLectura = 'muy_grande',
+  onCambiarTamanoModoLectura,
+  isDarkMode = false,
+  onToggleDarkMode,
 }) => {
   // Configuration State
   const [tipoPrueba, setTipoPrueba] = useState<TipoPrueba>('unitario');
@@ -151,6 +168,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   // Active exam rename state
   const [mostrarModalRenombrar, setMostrarModalRenombrar] = useState(false);
   const [nuevoTituloExamen, setNuevoTituloExamen] = useState('');
+  const [mostrarCasoModoLectura, setMostrarCasoModoLectura] = useState(false);
 
   const [historialPreguntasRecientes, setHistorialPreguntasRecientes] = useState<string[]>(() => {
     try {
@@ -186,33 +204,40 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
     }
   }, [examenActivo?.id, examenActivo?.tipo]);
 
-  // Load annotations from active exam or localStorage
+  // Load annotations from active exam or persistent storage
   useEffect(() => {
     if (examenActivo) {
       if (examenActivo.anotaciones && examenActivo.anotaciones.length > 0) {
         setAnotaciones(examenActivo.anotaciones);
       } else {
-        const saved = localStorage.getItem(`c1_anotaciones_${examenActivo.id}`);
-        if (saved) {
-          try {
-            setAnotaciones(JSON.parse(saved));
-          } catch (e) {
-            console.error('Error cargando anotaciones:', e);
-          }
-        } else {
-          setAnotaciones([]);
-        }
+        const guardadas = leerDatoPersistenteSincrono<AnotacionResaltado[]>(
+          `c1_anotaciones_${examenActivo.id}`,
+          []
+        );
+        setAnotaciones(Array.isArray(guardadas) ? guardadas : []);
       }
     }
   }, [examenActivo?.id]);
 
+  // Atajo de teclado Alt+L para activar/salir del Modo Lectura mientras hay un examen activo
+  useEffect(() => {
+    if (!examenActivo || !onToggleModoLectura) return;
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.altKey && (ev.key === 'l' || ev.key === 'L')) {
+        ev.preventDefault();
+        onToggleModoLectura();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [examenActivo, onToggleModoLectura]);
+
   // Session persistence: recover in-progress active exam on mount if any
   useEffect(() => {
     if (!examenParaCargar) {
-      const sesionGuardada = localStorage.getItem('c1_active_exam_session');
-      if (sesionGuardada) {
+      const s = leerDatoPersistenteSincrono<any>('c1_active_exam_session', null);
+      if (s) {
         try {
-          const s = JSON.parse(sesionGuardada);
           // Only recover valid full exams (at least 5 questions) so the user is never stuck with 2 questions
           if (s && s.examenActivo && Array.isArray(s.examenActivo.preguntas) && s.examenActivo.preguntas.length >= 5) {
             setExamenActivo(s.examenActivo);
@@ -228,11 +253,12 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
             if (s.examenActivo.tipo) setTipoPrueba(s.examenActivo.tipo);
             if (s.examenActivo.ambito) setAmbito(s.examenActivo.ambito);
           } else {
-            // Discard broken or incomplete 2-question session
             localStorage.removeItem('c1_active_exam_session');
+            void eliminarDeIndexedDB('c1_active_exam_session');
           }
         } catch (_) {
           localStorage.removeItem('c1_active_exam_session');
+          void eliminarDeIndexedDB('c1_active_exam_session');
         }
       }
     }
@@ -241,23 +267,19 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   // Save session when active test or answers update
   useEffect(() => {
     if (examenActivo) {
-      try {
-        const sesion = {
-          examenActivo,
-          preguntaActualIdx,
-          respuestasUsuario,
-          dudosasUsuario,
-          examenFinalizado,
-          modoRealizacion,
-          modoCorreccion,
-          tiempoRestanteSegundos,
-          tiempoTranscurridoSegundos,
-          anotaciones,
-        };
-        localStorage.setItem('c1_active_exam_session', JSON.stringify(sesion));
-      } catch (err) {
-        console.warn('No se pudo guardar la sesión en localStorage:', err);
-      }
+      const sesion = {
+        examenActivo,
+        preguntaActualIdx,
+        respuestasUsuario,
+        dudosasUsuario,
+        examenFinalizado,
+        modoRealizacion,
+        modoCorreccion,
+        tiempoRestanteSegundos,
+        tiempoTranscurridoSegundos,
+        anotaciones,
+      };
+      guardarEnLocalStorageSeguro('c1_active_exam_session', sesion);
     }
   }, [
     examenActivo,
@@ -274,7 +296,11 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
     try {
       localStorage.removeItem('c1_active_exam_session');
     } catch (_) {}
+    void eliminarDeIndexedDB('c1_active_exam_session');
     if (timerRef.current) clearInterval(timerRef.current);
+    if (modoLectura && onToggleModoLectura) {
+      onToggleModoLectura(false);
+    }
     setExamenActivo(null);
     setRespuestasUsuario({});
     setDudosasUsuario({});
@@ -622,7 +648,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
       };
       setExamenActivo(examenActualizado);
       onExamenGuardado(examenActualizado);
-      localStorage.setItem(`c1_anotaciones_${examenActivo.id}`, JSON.stringify(actualizadas));
+      guardarEnLocalStorageSeguro(`c1_anotaciones_${examenActivo.id}`, actualizadas);
     }
   };
 
@@ -637,7 +663,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
       };
       setExamenActivo(examenActualizado);
       onExamenGuardado(examenActualizado);
-      localStorage.setItem(`c1_anotaciones_${examenActivo.id}`, JSON.stringify(actualizadas));
+      guardarEnLocalStorageSeguro(`c1_anotaciones_${examenActivo.id}`, actualizadas);
     }
   };
 
@@ -1730,8 +1756,133 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
 
       {/* ACTIVE TEST RUNNER */}
       {examenActivo && preguntaActual && (
-        <div className="space-y-3">
-          {/* CUADRO ÚNICO COMPACTO UNIFICADO: Fuente BOE + Subrayador + Cabecera y Controles + Matriz de Preguntas (Ordinarias y Reserva) */}
+        <div className={modoLectura ? 'space-y-4 max-w-4xl mx-auto w-full' : 'space-y-3'}>
+          {/* BARRA MINIMALISTA DE CONCENTRACIÓN EN 'MODO LECTURA' */}
+          {modoLectura && (
+            <div className="bg-white/95 dark:bg-slate-900/95 border border-slate-300 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-2.5">
+              {/* Izquierda: Progreso limpio + Salto directo a pregunta + Reloj discreto */}
+              <div className="flex items-center gap-2.5 flex-wrap text-xs text-slate-600 dark:text-slate-300">
+                <span className="font-black text-indigo-600 dark:text-indigo-400 font-mono flex items-center gap-1.5">
+                  <i className="fa-solid fa-book-open-reader text-[11px]"></i>
+                  <span>Modo Lectura</span>
+                </span>
+                <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+                <select
+                  value={preguntaActualIdx}
+                  onChange={(e) => setPreguntaActualIdx(Number(e.target.value))}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-100 cursor-pointer focus:outline-none focus:border-indigo-500"
+                  title="Saltar directamente a cualquier pregunta"
+                >
+                  {examenActivo.preguntas.map((p, idx) => {
+                    const contestada = !!respuestasUsuario[idx];
+                    const etiqueta = p.esReserva
+                      ? `Reserva R${p.numeroReserva || 1}`
+                      : `Pregunta ${p.id}`;
+                    return (
+                      <option key={p.id} value={idx}>
+                        {etiqueta} de {examenActivo.preguntas.length} {contestada ? '✓' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                  {Object.keys(respuestasUsuario).length}/{examenActivo.preguntas.length} respondidas
+                </span>
+                {tiempoRestanteSegundos > 0 && (
+                  <>
+                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+                    <button
+                      type="button"
+                      onClick={() => !examenFinalizado && setIsTimerPaused(!isTimerPaused)}
+                      className={`font-mono font-bold text-xs inline-flex items-center gap-1 cursor-pointer ${
+                        isTimerPaused
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : tiempoRestanteSegundos < 120
+                          ? 'text-rose-600 animate-pulse'
+                          : 'text-slate-700 dark:text-slate-200'
+                      }`}
+                      title={isTimerPaused ? 'Clic para reanudar reloj' : 'Clic para pausar reloj'}
+                    >
+                      <i className={`fa-regular fa-clock text-[10px] ${isTimerPaused ? 'text-amber-500' : 'text-indigo-500'}`}></i>
+                      <span>{formatTimer(tiempoRestanteSegundos)}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Derecha: Tamaño de fuente + Dudosa + Tema oscuro + Salir Modo Lectura */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {onCambiarTamanoModoLectura && (
+                  <div
+                    className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                    title="Tamaño de letra en Modo Lectura"
+                  >
+                    {(
+                      [
+                        { id: 'grande', label: 'A', title: 'Fuente Grande' },
+                        { id: 'muy_grande', label: 'A+', title: 'Fuente Muy Grande' },
+                        { id: 'extra', label: 'A++', title: 'Fuente Extra Grande' },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => onCambiarTamanoModoLectura(opt.id)}
+                        className={`px-2 py-1 rounded-md text-[11px] font-black font-mono transition-colors cursor-pointer ${
+                          tamanoModoLectura === opt.id
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                        title={opt.title}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => toggleDudosa(preguntaActualIdx)}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1 ${
+                    dudosasUsuario[preguntaActualIdx]
+                      ? 'bg-amber-100 dark:bg-amber-950/70 border-amber-400 text-amber-900 dark:text-amber-200'
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                  title="Marcar pregunta como dudosa"
+                >
+                  <i className="fa-regular fa-flag text-[10px]"></i>
+                  <span>{dudosasUsuario[preguntaActualIdx] ? 'Dudosa' : 'Marcar duda'}</span>
+                </button>
+
+                {onToggleDarkMode && (
+                  <button
+                    type="button"
+                    onClick={onToggleDarkMode}
+                    className="h-7.5 w-7.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-amber-400 flex items-center justify-center text-xs cursor-pointer"
+                    title="Alternar tema claro / oscuro de lectura"
+                  >
+                    <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'}`}></i>
+                  </button>
+                )}
+
+                {onToggleModoLectura && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleModoLectura(false)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-700 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-black transition-colors cursor-pointer flex items-center gap-1.5"
+                    title="Salir del Modo Lectura y restaurar todos los paneles (Alt+L)"
+                  >
+                    <i className="fa-solid fa-compress text-[10px]"></i>
+                    <span>Salir Modo Lectura</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* CUADRO ÚNICO COMPACTO UNIFICADO (Se oculta en Modo Lectura) */}
+          {!modoLectura && (
           <div className="bg-indigo-50/90 dark:bg-slate-800 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl px-3.5 py-2.5 shadow-sm space-y-2">
             {/* Fila 1: Identificación del test, sello BOE/subrayador y botonera de control */}
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
@@ -1906,6 +2057,18 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                     </>
                   )}
                 </div>
+
+                {onToggleModoLectura && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleModoLectura()}
+                    className="py-1 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10.5px] font-black shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Activar Modo Lectura de Concentración: oculta paneles laterales/periféricos y centra el enunciado y las opciones con fuente ampliada (Alt+L)"
+                  >
+                    <i className="fa-solid fa-book-open-reader text-[10px]"></i>
+                    <span>Modo Lectura</span>
+                  </button>
+                )}
 
                 <button
                   onClick={exportarTestAJSON}
@@ -2206,36 +2369,100 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
               )}
             </div>
           </div>
+          )}
 
           {/* Case Context for Practical Scenarios (with Subrayador & Anotaciones) */}
           {examenActivo.contextoCaso && (
-            <div className="bg-amber-50/95 dark:bg-amber-950/35 border-2 border-amber-300 dark:border-amber-700 rounded-2xl p-4 shadow-sm space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+            <div
+              className={
+                modoLectura
+                  ? 'bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-2xl px-5 py-3.5 shadow-xs space-y-2'
+                  : 'bg-amber-50/95 dark:bg-amber-950/35 border-2 border-amber-300 dark:border-amber-700 rounded-2xl p-4 shadow-sm space-y-2'
+              }
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10.5px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                   <i className="fa-solid fa-scroll text-amber-600"></i>
-                  Relato Fáctico del Caso Administrativo (Texto Plano Subrayable)
+                  Relato Fáctico del Supuesto Práctico
                 </span>
-                <span className="text-[9px] text-amber-700 dark:text-amber-400 font-mono font-bold">
-                  Ámbito: {examenActivo.ambito}
-                </span>
+                {modoLectura ? (
+                  <button
+                    type="button"
+                    onClick={() => setMostrarCasoModoLectura((v) => !v)}
+                    className="text-xs font-bold text-amber-900 dark:text-amber-200 hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <i className={`fa-solid ${mostrarCasoModoLectura ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]`}></i>
+                    <span>{mostrarCasoModoLectura ? 'Contraer relato del supuesto' : 'Desplegar relato del supuesto'}</span>
+                  </button>
+                ) : (
+                  <span className="text-[9px] text-amber-700 dark:text-amber-400 font-mono font-bold">
+                    Ámbito: {examenActivo.ambito}
+                  </span>
+                )}
               </div>
-              <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-normal whitespace-pre-line">
-                <AnnotatedPlainTextViewer
-                  text={examenActivo.contextoCaso}
-                  seccion="contextoCaso"
-                  examenId={examenActivo.id}
-                  anotaciones={anotaciones}
-                  onGuardarAnotacion={handleGuardarAnotacion}
-                  onEliminarAnotacion={handleEliminarAnotacion}
-                />
-              </div>
+              {(!modoLectura || mostrarCasoModoLectura) && (
+                <div
+                  className={
+                    modoLectura
+                      ? `${
+                          tamanoModoLectura === 'extra'
+                            ? 'text-lg sm:text-xl'
+                            : tamanoModoLectura === 'muy_grande'
+                            ? 'text-base sm:text-lg'
+                            : 'text-sm sm:text-base'
+                        } text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line pt-2 border-t border-amber-200/70 dark:border-amber-800/60`
+                      : 'text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-normal whitespace-pre-line'
+                  }
+                >
+                  <AnnotatedPlainTextViewer
+                    text={examenActivo.contextoCaso}
+                    seccion="contextoCaso"
+                    examenId={examenActivo.id}
+                    anotaciones={anotaciones}
+                    onGuardarAnotacion={handleGuardarAnotacion}
+                    onEliminarAnotacion={handleEliminarAnotacion}
+                  />
+                </div>
+              )}
             </div>
           )}
 
-          {/* Question Box ampliado (mayor protagonismo visual y altura estable al responder) */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-7 shadow-md min-h-[430px] sm:min-h-[465px] flex flex-col justify-between gap-5">
-            <div className="space-y-4">
-              <div className="space-y-2.5">
+          {/* Question Box ampliado (En Modo Lectura: centrado, limpio de elementos laterales y con fuente mayor) */}
+          <div
+            className={
+              modoLectura
+                ? 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-3xl px-6 sm:px-12 py-8 sm:py-11 shadow-lg min-h-[490px] sm:min-h-[530px] flex flex-col justify-between gap-7 transition-all'
+                : 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-7 shadow-md min-h-[430px] sm:min-h-[465px] flex flex-col justify-between gap-5'
+            }
+          >
+            <div className={modoLectura ? 'space-y-7' : 'space-y-4'}>
+              <div className={modoLectura ? 'space-y-4' : 'space-y-2.5'}>
+              {/* Cabecera de la pregunta: minimalista y centrada en Modo Lectura; completa en vista estándar */}
+              {modoLectura ? (
+                <div className="text-center space-y-1.5">
+                  <div className="flex items-center justify-center gap-2 flex-wrap text-xs font-mono text-slate-500 dark:text-slate-400">
+                    <span className="font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                      {preguntaActual.esReserva
+                        ? `Pregunta de Reserva #${preguntaActual.numeroReserva || 1} de ${preguntasReserva.length || 5}`
+                        : `Pregunta ${preguntaActual.id} de ${preguntasOrdinarias.length}`}
+                    </span>
+                    {preguntaActual.esAnulada && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-black text-rose-600 dark:text-rose-400 uppercase">Anulada en plantilla</span>
+                      </>
+                    )}
+                    {/INCORRECTA|FALSA|ERRÓNEA/i.test(preguntaActual.enunciado) && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-black text-amber-700 dark:text-amber-300 uppercase">
+                          Atención: pide opción INCORRECTA / FALSA
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] font-mono font-black uppercase text-indigo-600 dark:text-indigo-400 block">
@@ -2345,26 +2572,41 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                   </button>
                 </div>
 
-                {/* Botón para simular / cambiar anulación en plantilla por tribunal */}
-                {(examenFinalizado || modoRealizacion === 'interactivo') && (
-                  <button
-                    type="button"
-                    onClick={() => toggleAnulada(preguntaActualIdx)}
-                    className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                      preguntaActual.esAnulada
-                        ? 'bg-rose-50 hover:bg-rose-100 border-rose-300 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
-                        : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600'
-                    }`}
-                    title="Alternar estado de ANULADA de esta pregunta en la plantilla para recalcular la nota con las reservas"
-                  >
-                    <i className={preguntaActual.esAnulada ? 'fa-solid fa-rotate-left text-rose-500' : 'fa-solid fa-ban text-slate-400'}></i>
-                    <span>{preguntaActual.esAnulada ? 'Desmarcar Anulación' : 'Marcar como ANULADA (Tribunal)'}</span>
-                  </button>
-                )}
-              </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {onToggleModoLectura && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleModoLectura(true)}
+                      className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Abrir Modo Lectura centrado y con fuente ampliada (Alt+L)"
+                    >
+                      <i className="fa-solid fa-book-open-reader text-indigo-600 dark:text-indigo-400"></i>
+                      <span>Modo Lectura</span>
+                    </button>
+                  )}
 
-              {/* Banner contextual de anulación o sustitución */}
-              {preguntaActual.esAnulada && (
+                  {/* Botón para simular / cambiar anulación en plantilla por tribunal */}
+                  {(examenFinalizado || modoRealizacion === 'interactivo') && (
+                    <button
+                      type="button"
+                      onClick={() => toggleAnulada(preguntaActualIdx)}
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                        preguntaActual.esAnulada
+                          ? 'bg-rose-50 hover:bg-rose-100 border-rose-300 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
+                          : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600'
+                      }`}
+                      title="Alternar estado de ANULADA de esta pregunta en la plantilla para recalcular la nota con las reservas"
+                    >
+                      <i className={preguntaActual.esAnulada ? 'fa-solid fa-rotate-left text-rose-500' : 'fa-solid fa-ban text-slate-400'}></i>
+                      <span>{preguntaActual.esAnulada ? 'Desmarcar Anulación' : 'Marcar como ANULADA (Tribunal)'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+              )}
+
+              {/* Banner contextual de anulación o sustitución (Solo en vista estándar) */}
+              {!modoLectura && preguntaActual.esAnulada && (
                 <div className="p-3 bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-900 dark:text-rose-200 flex items-start gap-2.5">
                   <i className="fa-solid fa-ban text-rose-600 mt-0.5 shrink-0 text-sm"></i>
                   <div>
@@ -2382,7 +2624,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                 </div>
               )}
 
-              {preguntaActual.esReserva && preguntaActual.activaEnEvaluacion && (
+              {!modoLectura && preguntaActual.esReserva && preguntaActual.activaEnEvaluacion && (
                 <div className="p-3 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200 flex items-start gap-2.5">
                   <i className="fa-solid fa-star text-amber-500 mt-0.5 shrink-0 text-sm"></i>
                   <div>
@@ -2391,13 +2633,27 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                 </div>
               )}
 
-              {preguntaActual.esReserva && !preguntaActual.activaEnEvaluacion && (
+              {!modoLectura && preguntaActual.esReserva && !preguntaActual.activaEnEvaluacion && (
                 <div className="p-2.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                   <i className="fa-solid fa-circle-info text-slate-400"></i>
                   <span>Pregunta de reserva que no computa en la nota final al no haber suficientes preguntas ordinarias anuladas que cubrir.</span>
                 </div>
               )}
-              <div className="text-[15px] sm:text-[17px] font-bold text-slate-900 dark:text-white leading-relaxed pt-1">
+
+              {/* Enunciado: centrado y en fuente ampliada cuando Modo Lectura está activo */}
+              <div
+                className={
+                  modoLectura
+                    ? `${
+                        tamanoModoLectura === 'extra'
+                          ? 'text-2xl sm:text-[27px] lg:text-[30px]'
+                          : tamanoModoLectura === 'muy_grande'
+                          ? 'text-xl sm:text-2xl lg:text-[25px]'
+                          : 'text-lg sm:text-xl lg:text-[22px]'
+                      } font-bold text-slate-900 dark:text-white leading-relaxed text-center max-w-3xl mx-auto pt-1`
+                    : 'text-[15px] sm:text-[17px] font-bold text-slate-900 dark:text-white leading-relaxed pt-1'
+                }
+              >
                 <AnnotatedPlainTextViewer
                   text={preguntaActual.enunciado}
                   seccion="enunciado"
@@ -2410,13 +2666,19 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
               </div>
               </div>
 
-            {/* Options List (altura fija e invariable al responder; sin duplicar texto legal ni bloque BOE) */}
+            {/* Options List (altura fija e invariable al responder; centradas y ampliadas en Modo Lectura) */}
             {(() => {
               const estaRevelada = (modoCorreccion === 'paso_a_paso' && !!respuestaActual) || examenFinalizado;
+              const claseTextoOpcionModoLectura =
+                tamanoModoLectura === 'extra'
+                  ? 'text-lg sm:text-[22px]'
+                  : tamanoModoLectura === 'muy_grande'
+                  ? 'text-[17px] sm:text-[19px]'
+                  : 'text-base sm:text-[17px]';
 
               return (
                 <>
-                  <div className="space-y-3">
+                  <div className={modoLectura ? 'space-y-3.5 max-w-3xl mx-auto w-full' : 'space-y-3'}>
                     {preguntaActual.opciones.map((opc) => {
                       const isSelected = respuestaActual === opc.id;
 
@@ -2476,14 +2738,22 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                         <div
                           key={opc.id}
                           onClick={() => seleccionarOpcion(opc.id as any)}
-                          className={`p-3.5 sm:p-4 rounded-xl border text-[13.5px] sm:text-[15px] font-medium cursor-pointer select-none transition-colors flex items-start gap-3.5 ${optClass}`}
+                          className={
+                            modoLectura
+                              ? `p-4 sm:px-6 sm:py-4.5 rounded-2xl border ${claseTextoOpcionModoLectura} font-medium cursor-pointer select-none transition-colors flex items-center gap-4 ${optClass}`
+                              : `p-3.5 sm:p-4 rounded-xl border text-[13.5px] sm:text-[15px] font-medium cursor-pointer select-none transition-colors flex items-start gap-3.5 ${optClass}`
+                          }
                         >
                           <span
-                            className={`h-6.5 w-6.5 rounded-lg flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5 ${badgeClass}`}
+                            className={
+                              modoLectura
+                                ? `h-8 w-8 rounded-xl flex items-center justify-center font-mono font-black text-sm shrink-0 ${badgeClass}`
+                                : `h-6.5 w-6.5 rounded-lg flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5 ${badgeClass}`
+                            }
                           >
                             {opc.id}
                           </span>
-                          <div className="flex-1 leading-relaxed py-0.5">
+                          <div className={modoLectura ? 'flex-1 leading-relaxed py-0.5 text-center' : 'flex-1 leading-relaxed py-0.5'}>
                             <AnnotatedPlainTextViewer
                               text={opc.texto}
                               seccion="opcion"
@@ -2495,7 +2765,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                               onEliminarAnotacion={handleEliminarAnotacion}
                             />
                           </div>
-                          <span className="h-6.5 w-6.5 shrink-0 mt-0.5 flex items-center justify-center">
+                          <span className={modoLectura ? 'h-8 w-8 shrink-0 flex items-center justify-center' : 'h-6.5 w-6.5 shrink-0 mt-0.5 flex items-center justify-center'}>
                             {rightIndicator}
                           </span>
                         </div>
@@ -2503,8 +2773,8 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                     })}
                   </div>
 
-                  {/* Barra de control fija en corrección al final (altura estable sin saltos) */}
-                  {modoCorreccion === 'al_final' && !examenFinalizado && (
+                  {/* Barra de control fija en corrección al final (solo en vista estándar; en Modo Lectura queda despejada) */}
+                  {!modoLectura && modoCorreccion === 'al_final' && !examenFinalizado && (
                     <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs">
                       <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                         <i className="fa-solid fa-circle-info text-indigo-500"></i>
@@ -2637,6 +2907,9 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                 ) : (
                   <button
                     onClick={() => {
+                      if (modoLectura && onToggleModoLectura) {
+                        onToggleModoLectura(false);
+                      }
                       window.scrollTo({ top: 380, behavior: 'smooth' });
                     }}
                     className="py-2 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer"
@@ -2648,8 +2921,8 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
             </div>
           </div>
 
-          {/* Final Results Report */}
-          {examenFinalizado && examenActivo.resultado && (() => {
+          {/* Final Results Report (En Modo Lectura se oculta para mantener limpieza total, con acceso directo) */}
+          {!modoLectura && examenFinalizado && examenActivo.resultado && (() => {
             const totalQ =
               examenActivo.resultado.preguntasEvaluadasTotal ||
               (examenActivo.tipo === 'supuesto' ? 20 : 70);

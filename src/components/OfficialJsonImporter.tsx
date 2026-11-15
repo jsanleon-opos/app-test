@@ -15,6 +15,7 @@ import {
   deducirCategoriaExamen,
   auditarExamenDesdeTexto,
   AuditoriaExamenImportado,
+  esArchivoCopiaSeguridadIntegral,
 } from '../utils/jsonExamHelper';
 import { SelectorLeyesEInformaticaModal } from './SelectorLeyesEInformaticaModal';
 import {
@@ -46,6 +47,7 @@ interface OfficialJsonImporterProps {
   onLimpiarExamenParaEditarRespuestas?: () => void;
   onGuardarRespuestasCorregidas?: (examenActualizado: ExamenCompleto) => void;
   onExportarExamenPDF?: (examen: ExamenCompleto) => void;
+  onRestaurarCopiaSeguridad?: (rawText: string) => void;
 }
 
 function aplicarClavesTextoAPreguntas(
@@ -147,6 +149,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
   onLimpiarExamenParaEditarRespuestas,
   onGuardarRespuestasCorregidas,
   onExportarExamenPDF,
+  onRestaurarCopiaSeguridad,
 }) => {
   const [jsonText, setJsonText] = useState('');
   const [eliminarReservasSiNoConstan, setEliminarReservasSiNoConstan] = useState(false);
@@ -213,6 +216,21 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
 
     if (!texto || texto.trim().length < 20) {
       setErrorValidacion('El archivo o texto está vacío o no contiene suficientes caracteres para un examen.');
+      return;
+    }
+
+    if (esArchivoCopiaSeguridadIntegral(texto) && onRestaurarCopiaSeguridad) {
+      try {
+        onRestaurarCopiaSeguridad(texto);
+        setJsonText('');
+        setMensajeExito(
+          '¡Archivo detectado como Copia de Seguridad Integral! Se han restaurado todos tus exámenes, historial, dudas y enlaces.'
+        );
+      } catch (err: any) {
+        setErrorValidacion(
+          `Error al restaurar la Copia de Seguridad Integral: ${err?.message || 'Formato no válido'}`
+        );
+      }
       return;
     }
 

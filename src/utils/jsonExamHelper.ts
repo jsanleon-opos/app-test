@@ -24,6 +24,12 @@ import {
   DOCUMENTOS_INICIALES_BIBLIOTECA,
   SUBTEMAS_PREDEFINIDOS_BIBLIOTECA,
 } from '../constants/catalogoBibliotecaDocumentos';
+import { EXAMENES_PRECARGADOS_OFICIALES } from '../constants/boeData';
+import {
+  guardarDatoPersistenteIntegral,
+  leerDatoPersistenteSincrono,
+  recopilarTodasLasAnotacionesPersistidas,
+} from './idbPersistentStore';
 
 const STORAGE_KEY_RECURSOS_ARGUMENTACION = 'c1_recursos_argumentacion_preguntas';
 const STORAGE_KEY_BIBLIOTECA_DOCUMENTOS = 'c1_biblioteca_documentos';
@@ -64,16 +70,15 @@ export function sanitizarDocumentoBibliotecaSinBinarios(
 }
 
 export function leerBibliotecaDocumentosDeLocalStorage(): DocumentoBibliotecaItem[] {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  if (typeof window === 'undefined') {
     return DOCUMENTOS_INICIALES_BIBLIOTECA;
   }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_BIBLIOTECA_DOCUMENTOS);
-    if (!raw) {
+    const parsed = leerDatoPersistenteSincrono<any[] | null>(STORAGE_KEY_BIBLIOTECA_DOCUMENTOS, null);
+    if (!parsed) {
       guardarEnLocalStorageSeguro(STORAGE_KEY_BIBLIOTECA_DOCUMENTOS, DOCUMENTOS_INICIALES_BIBLIOTECA);
       return DOCUMENTOS_INICIALES_BIBLIOTECA;
     }
-    const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       const guardados = parsed.map((d) => sanitizarDocumentoBibliotecaSinBinarios(d));
       // Incorporar automáticamente nuevos documentos oficiales iniciales (ej. RD 1708/2011, RD 366/2007, IV Convenio, RD 951/2005) si aún no constan
@@ -130,16 +135,15 @@ export function fusionarBibliotecaDocumentosEnLocalStorage(
 }
 
 export function leerSubtemasBibliotecaDeLocalStorage(): string[] {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  if (typeof window === 'undefined') {
     return SUBTEMAS_PREDEFINIDOS_BIBLIOTECA;
   }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_BIBLIOTECA_SUBTEMAS);
-    if (!raw) {
+    const parsed = leerDatoPersistenteSincrono<string[] | null>(STORAGE_KEY_BIBLIOTECA_SUBTEMAS, null);
+    if (!parsed) {
       guardarEnLocalStorageSeguro(STORAGE_KEY_BIBLIOTECA_SUBTEMAS, SUBTEMAS_PREDEFINIDOS_BIBLIOTECA);
       return SUBTEMAS_PREDEFINIDOS_BIBLIOTECA;
     }
-    const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       const combinados = Array.from(
         new Set([...SUBTEMAS_PREDEFINIDOS_BIBLIOTECA, ...parsed.filter((s) => typeof s === 'string' && s.trim())])
@@ -180,12 +184,13 @@ export function normalizarClaveRecursoPregunta(enunciado?: string): string {
 }
 
 export function leerMapaRecursosArgumentacionGlobal(): Record<string, RecursoArgumentacionPregunta[]> {
-  if (typeof window === 'undefined' || !window.localStorage) return {};
+  if (typeof window === 'undefined') return {};
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_RECURSOS_ARGUMENTACION);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    const parsed = leerDatoPersistenteSincrono<Record<string, RecursoArgumentacionPregunta[]>>(
+      STORAGE_KEY_RECURSOS_ARGUMENTACION,
+      {}
+    );
+    return parsed && typeof parsed === 'object' ? { ...parsed } : {};
   } catch (_) {
     return {};
   }
@@ -237,11 +242,8 @@ export function obtenerRecursosArgumentacionDePregunta(
 export function fusionarAlmacenDudasEnLocalStorage(nuevasDudas?: ItemAlmacenDuda[]): ItemAlmacenDuda[] {
   let existentes: ItemAlmacenDuda[] = [];
   try {
-    const raw = localStorage.getItem('c1_almacen_dudas');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) existentes = parsed;
-    }
+    const parsed = leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
+    if (Array.isArray(parsed)) existentes = parsed;
   } catch (_) {}
 
   if (!Array.isArray(nuevasDudas) || nuevasDudas.length === 0) {
@@ -399,7 +401,10 @@ export function limpiarTextoJSON(raw: string): string {
  * a un objeto ExamenCompleto válido para el simulador interactivo con
  * separación estricta de preguntas ordinarias y preguntas de reserva según la normativa.
  */
-export function validarYConvertirJSON(obj: any): ExamenCompleto {
+export function validarYConvertirJSON(
+  obj: any,
+  opcionesInternas?: { preservarResultadoIntegro?: boolean }
+): ExamenCompleto {
   if (!obj || typeof obj !== 'object') {
     throw new Error('El archivo no contiene un objeto JSON estructurado válido.');
   }
@@ -596,6 +601,7 @@ export function validarYConvertirJSON(obj: any): ExamenCompleto {
       opciones,
       tematica: p.tematica,
       codigoInedita: p.codigoInedita || p.codigoUnicoInedita,
+      huellaAuditoria: p.huellaAuditoria,
       ejemploPractico: p.ejemploPractico,
       reglaMnemotecnica: p.reglaMnemotecnica,
       analisisDistractores: p.analisisDistractores,
@@ -613,6 +619,7 @@ export function validarYConvertirJSON(obj: any): ExamenCompleto {
         codigoBOE: p.justificacionLegal?.codigoBOE || 'BOE-A',
         urlBOE: p.justificacionLegal?.urlBOE || 'https://www.boe.es',
         fundamento: p.justificacionLegal?.fundamento || 'Fundamentado en el Boletín Oficial del Estado (www.boe.es)',
+        ejemploPractico: p.justificacionLegal?.ejemploPractico,
       },
       esReserva,
       numeroReserva: numRes,
@@ -663,9 +670,22 @@ export function validarYConvertirJSON(obj: any): ExamenCompleto {
     timestamp: an.timestamp || new Date().toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }),
   }));
 
-  // Si el objeto ya incluía resultado o respuestas previas, recalcular conforme a normativa oficial de reserva
+  // Si el objeto ya incluía resultado o respuestas previas:
+  // En restauración de copia de seguridad preservamos las métricas exactas guardadas sin sobrescribir cortes propios ni notas históricas.
   let resultadoFinal = obj.resultado;
-  if (resultadoFinal && resultadoFinal.respuestasUsuario) {
+  if (
+    opcionesInternas?.preservarResultadoIntegro &&
+    resultadoFinal &&
+    typeof resultadoFinal.puntuacionDirecta === 'number'
+  ) {
+    resultadoFinal = {
+      ...resultadoFinal,
+      anuladas: resultadoFinal.anuladas ?? anuladasCount,
+      reservasUsadas: resultadoFinal.reservasUsadas ?? reservasUsadasCount,
+      sustituciones: resultadoFinal.sustituciones ?? sustituciones,
+      respuestasUsuario: resultadoFinal.respuestasUsuario || {},
+    };
+  } else if (resultadoFinal && resultadoFinal.respuestasUsuario) {
     const fechaOriginal = resultadoFinal.fechaRealizacion || obj.fecha;
     const { resultado } = calcularResultadoExamenConReservas(
       preguntasActualizadas,
@@ -690,15 +710,20 @@ export function validarYConvertirJSON(obj: any): ExamenCompleto {
 
   return {
     id: obj.id || `JSON-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    testBaseId: typeof obj.testBaseId === 'string' && obj.testBaseId ? obj.testBaseId : undefined,
+    intentoNumero: typeof obj.intentoNumero === 'number' ? obj.intentoNumero : undefined,
+    soloHistorial: typeof obj.soloHistorial === 'boolean' ? obj.soloHistorial : undefined,
     titulo,
     tipo: tipoFinal,
     categoria: categoriaFinal,
     ambito: obj.ambito === 'CAM' ? 'CAM' : obj.ambito === 'AMBOS' ? 'AMBOS' : 'AGE',
     origen: obj.origen || 'oficial_json',
     fecha: obj.fecha || new Date().toISOString().split('T')[0],
+    dificultad: obj.dificultad,
     contextoCaso: obj.contextoCaso,
     tematicas: obj.tematicas || ['procedimiento_administrativo'],
     leyesBOEAplicadas: obj.leyesBOEAplicadas || ['Legislación consolidada en www.boe.es'],
+    testsIncluidos: Array.isArray(obj.testsIncluidos) ? obj.testsIncluidos : undefined,
     preguntas: preguntasActualizadas,
     anotaciones,
     resultado: resultadoFinal,
@@ -3176,14 +3201,26 @@ export async function guardarArchivoConSelectorCarpeta(
   mimeType: string = 'application/json',
   extension: string = '.json'
 ): Promise<boolean> {
-  // 1. Selector nativo con elección de carpeta y nombre
-  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+  const blob = new Blob([dataString], { type: `${mimeType};charset=utf-8` });
+
+  // 1. Selector nativo con elección de carpeta y nombre (solo en ventana principal no embebida en iframe cruzado)
+  const estaEnVentanaTop =
+    typeof window !== 'undefined' &&
+    (() => {
+      try {
+        return window.self === window.top;
+      } catch {
+        return false;
+      }
+    })();
+
+  if (estaEnVentanaTop && typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
     try {
       const pickerOpts = {
         suggestedName: nombreSugerido,
         types: [
           {
-            description: 'Archivo JSON de Examen / Copia de Seguridad',
+            description: 'Archivo JSON de Examen / Copia de Seguridad Integral',
             accept: {
               [mimeType]: [extension],
             },
@@ -3191,29 +3228,33 @@ export async function guardarArchivoConSelectorCarpeta(
         ],
       };
       const handle = await (window as any).showSaveFilePicker(pickerOpts);
-      const writable = await handle.createWritable();
-      await writable.write(dataString);
+      const writable = await handle.createWritable({ keepExistingData: false });
+      await writable.write(blob);
       await writable.close();
       return true;
     } catch (err: any) {
-      // Si el usuario cancela la ventana de selección de carpeta, no forzar descarga
+      // Si el usuario cancela explícitamente la ventana de selección de carpeta, no forzar descarga
       if (err && (err.name === 'AbortError' || err.code === 20)) {
         return false;
       }
-      console.warn('showSaveFilePicker no completado, ejecutando descarga directa:', err);
+      console.warn('showSaveFilePicker no completado, ejecutando descarga directa íntegra:', err);
     }
   }
 
-  // 2. Fallback estándar compatible universalmente
-  const blob = new Blob([dataString], { type: `${mimeType};charset=utf-8` });
+  // 2. Descarga estándar íntegra mediante Blob (con liberación diferida de 60s para garantizar escritura completa de archivos grandes)
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = nombreSugerido;
+  link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    try {
+      URL.revokeObjectURL(url);
+    } catch (_) {}
+  }, 60_000);
   return true;
 }
 
@@ -3339,12 +3380,27 @@ export async function exportarBibliotecaAJSON(
   return await guardarArchivoConSelectorCarpeta(dataString, nombreSugerido, 'application/json', '.json');
 }
 
+export interface ResumenCopiaSeguridadExportada {
+  totalBancoExamenes: number;
+  totalPreguntasBanco: number;
+  totalHistorialPruebas: number;
+  totalDudasAlmacen: number;
+  totalDocumentosBiblioteca: number;
+  totalSubtemasBiblioteca: number;
+  totalRecursosArgumentacion: number;
+  totalAnotaciones: number;
+  totalPreguntasControlFalladas: number;
+  tamanoBytes: number;
+  nombreArchivo: string;
+}
+
 export interface CopiaSeguridadIntegral {
   tipo: 'copia_seguridad_simulador_c1';
-  version: '3.2' | '2.6' | '2.5';
+  version: '3.7' | '3.2' | '2.6' | '2.5';
   fecha: string;
   metadata: {
     totalBancoExamenes: number;
+    totalPreguntasBanco?: number;
     totalHistorialPruebas: number;
     totalExamenes?: number;
     totalAnotaciones: number;
@@ -3359,15 +3415,17 @@ export interface CopiaSeguridadIntegral {
   historialPruebas: ExamenCompleto[];
   examenesGuardados?: ExamenCompleto[];
   anotacionesPorExamen: Record<string, any[]>;
-  almacenDudas?: ItemAlmacenDuda[];
+  almacenDudas: ItemAlmacenDuda[];
   /** Base de datos de enlaces a documentos locales o webs externas (NUNCA almacena archivos binarios) */
-  bibliotecaDocumentos?: DocumentoBibliotecaItem[];
-  subtemasBiblioteca?: string[];
-  recursosArgumentacionPorPregunta?: Record<string, RecursoArgumentacionPregunta[]>;
-  controlPreguntasSuperadas?: Record<string, any>;
-  examenesEliminadosIds?: string[];
-  historialPreguntasRecientes?: string[];
-  testsDescargadosPDF?: any[];
+  bibliotecaDocumentos: DocumentoBibliotecaItem[];
+  subtemasBiblioteca: string[];
+  recursosArgumentacionPorPregunta: Record<string, RecursoArgumentacionPregunta[]>;
+  controlPreguntasSuperadas: Record<string, any>;
+  examenesEliminadosIds: string[];
+  historialPreguntasRecientes: string[];
+  testsDescargadosPDF: any[];
+  sesionExamenActiva?: any;
+  clavesAdicionalesLocalStorage?: Record<string, string>;
   configuracion: {
     darkMode?: boolean;
     autoAvanceAlFinal?: boolean;
@@ -3375,166 +3433,330 @@ export interface CopiaSeguridadIntegral {
     cortePropioSupuesto?: string;
     usarCortePropio?: boolean;
     geminiApiKey?: string;
+    geminiSelectedModel?: string;
+    modoLecturaTamano?: string;
   };
 }
 
 /**
- * Genera y guarda un archivo JSON con la Copia de Seguridad Integral Única
- * permitiendo elegir en qué carpeta guardarla.
- * Incluye TODOS los aspectos de la app:
- * - Banco de Exámenes (Tests y Supuestos)
- * - Historial de Pruebas realizadas
- * - Biblioteca: Almacén de Dudas y Notas + Base de Datos de Documentos y Enlaces (sin archivos físicos) + Subtemas
- * - Recursos de Argumentación por pregunta (enlaces y rutas locales en justificaciones)
+ * Detecta si un texto JSON corresponde a un fichero de Copia de Seguridad Integral
+ * (para poder restaurarlo automáticamente incluso si se sube desde Banco o Historial).
+ */
+export function esArchivoCopiaSeguridadIntegral(rawText: string): boolean {
+  if (!rawText || rawText.length < 20) return false;
+  try {
+    const cleaned = limpiarTextoJSON(rawText);
+    if (!cleaned.startsWith('{')) return false;
+    const parsed = JSON.parse(cleaned);
+    if (!parsed || typeof parsed !== 'object') return false;
+    return (
+      parsed.tipo === 'copia_seguridad_simulador_c1' ||
+      (Array.isArray(parsed.bancoExamenes) && Array.isArray(parsed.historialPruebas))
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+const CLAVES_TOP_LEVEL_GESTIONADAS = new Set<string>([
+  'c1_banco_examenes',
+  'c1_historial_pruebas',
+  'c1_examenes_guardados',
+  'c1_almacen_dudas',
+  'c1_biblioteca_documentos',
+  'c1_biblioteca_subtemas',
+  'c1_recursos_argumentacion_preguntas',
+  'c1_preguntas_superadas_v1',
+  'c1_examenes_eliminados',
+  'c1_historial_preguntas_recientes',
+  'c1_tests_descargados_pdf',
+  'c1_active_exam_session',
+  'c1_dark_mode',
+  'c1_auto_avance_al_final',
+  'c1_corte_propio_test',
+  'c1_corte_propio_supuesto',
+  'c1_usar_corte_propio',
+  'c1_custom_gemini_api_key',
+  'gemini_custom_api_key',
+  'c1_selected_gemini_model',
+  'c1_modo_lectura_tamano',
+]);
+
+/**
+ * Genera y guarda un archivo JSON con la Copia de Seguridad Integral Única (v3.7)
+ * consolidando TODOS los datos tanto del estado en memoria como del almacenamiento persistente:
+ * - Banco de Exámenes completo (plantillas importadas, creadas y oficiales personalizadas)
+ * - Historial de Pruebas completo (todos los intentos, simulacros y tests de falladas con notas y respuestas)
+ * - Biblioteca completa:
+ *   · Almacén de Dudas, Artículos Clave, Plazos, Mnemotecnia y Fichas de Informática
+ *   · Base de Datos de Documentos y Enlaces (webs externas y rutas locales, sin binarios)
+ *   · Subtemas personalizados y predefinidos
+ * - Recursos de Argumentación por pregunta (enlaces y documentos en justificaciones)
  * - Anotaciones y subrayados por examen
- * - Registro de control de preguntas falladas/superadas, historial anti-repetición y preferencias/cortes propios
+ * - Registro de preguntas superadas/falladas, exámenes eliminados, tests descargados en PDF, sesión activa y configuración
  */
 export async function descargarCopiaSeguridadCompleta(
   bancoOExamenes: ExamenCompleto[],
   historialOpcional?: ExamenCompleto[],
   almacenDudasOpcional?: ItemAlmacenDuda[],
   bibliotecaDocumentosOpcional?: DocumentoBibliotecaItem[],
-  subtemasBibliotecaOpcional?: string[]
-): Promise<boolean> {
-  const enriquecerExamenConRecursos = (ex: ExamenCompleto): ExamenCompleto => ({
-    ...ex,
-    preguntas: ex.preguntas.map((p) => {
-      const rec = obtenerRecursosArgumentacionDePregunta(p);
-      return rec.length > 0 ? { ...p, recursosArgumentacion: rec } : p;
-    }),
-  });
+  subtemasBibliotecaOpcional?: string[],
+  examenesEliminadosOpcional?: string[]
+): Promise<{ ok: boolean; resumen?: ResumenCopiaSeguridadExportada }> {
+  // 1. Consolidar IDs de exámenes eliminados
+  const eliminadosPersistidos = leerDatoPersistenteSincrono<string[]>('c1_examenes_eliminados', []);
+  const examenesEliminadosIds = Array.from(
+    new Set([
+      ...(Array.isArray(eliminadosPersistidos) ? eliminadosPersistidos : []),
+      ...(Array.isArray(examenesEliminadosOpcional) ? examenesEliminadosOpcional : []),
+    ])
+  );
+  const setEliminados = new Set(examenesEliminadosIds);
 
-  const bancoExamenes = (
-    historialOpcional !== undefined
-      ? bancoOExamenes
-      : bancoOExamenes.filter((e) => !e.resultado)
-  ).map(enriquecerExamenConRecursos);
+  // 2. Consolidar mapa global de recursos de argumentación + cosechar cualquier recurso embebido
+  const mapaRecursosGlobal: Record<string, RecursoArgumentacionPregunta[]> = {
+    ...leerMapaRecursosArgumentacionGlobal(),
+  };
 
-  const historialPruebas = (
-    historialOpcional !== undefined
-      ? historialOpcional
-      : bancoOExamenes.filter((e) => !!e.resultado)
-  ).map(enriquecerExamenConRecursos);
-
-  const todosParaAnotaciones = [...bancoExamenes, ...historialPruebas];
-
-  // Recopilar todas las notas y subrayados de localStorage
-  const anotacionesPorExamen: Record<string, any[]> = {};
-  let totalAnotaciones = 0;
-
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('c1_anotaciones_')) {
-        const examId = key.replace('c1_anotaciones_', '');
-        try {
-          const val = JSON.parse(localStorage.getItem(key) || '[]');
-          anotacionesPorExamen[examId] = val;
-          totalAnotaciones += Array.isArray(val) ? val.length : 0;
-        } catch (_) {}
+  const registrarRecursosDeItem = (enunciado?: string, lista?: RecursoArgumentacionPregunta[]) => {
+    if (!enunciado || !Array.isArray(lista) || lista.length === 0) return;
+    const clave = normalizarClaveRecursoPregunta(enunciado);
+    if (!clave) return;
+    const existentes = Array.isArray(mapaRecursosGlobal[clave]) ? mapaRecursosGlobal[clave] : [];
+    const vistos = new Set<string>();
+    const combinados: RecursoArgumentacionPregunta[] = [];
+    for (const r of [...existentes, ...lista]) {
+      if (!r || !r.url) continue;
+      const k = `${r.id || ''}|${r.tipo}|${r.titulo}|${r.url}`;
+      if (!vistos.has(k)) {
+        vistos.add(k);
+        combinados.push(r);
       }
     }
-  } catch (_) {}
+    if (combinados.length > 0) {
+      mapaRecursosGlobal[clave] = combinados;
+    }
+  };
 
-  // Recopilar también anotaciones que estén dentro de los objetos examen
-  todosParaAnotaciones.forEach((ex) => {
-    if (ex.anotaciones && ex.anotaciones.length > 0) {
-      if (!anotacionesPorExamen[ex.id]) {
-        anotacionesPorExamen[ex.id] = ex.anotaciones;
-        totalAnotaciones += ex.anotaciones.length;
+  // 3. Consolidar todas las anotaciones y subrayados por examen
+  const anotacionesPorExamen: Record<string, any[]> = {
+    ...recopilarTodasLasAnotacionesPersistidas(),
+  };
+
+  const enriquecerExamenCompleto = (ex: ExamenCompleto): ExamenCompleto => {
+    const preguntasEnriquecidas = (ex.preguntas || []).map((p) => {
+      if (Array.isArray(p.recursosArgumentacion) && p.recursosArgumentacion.length > 0) {
+        registrarRecursosDeItem(p.enunciado, p.recursosArgumentacion);
       }
+      const clave = normalizarClaveRecursoPregunta(p.enunciado);
+      const rec = clave && Array.isArray(mapaRecursosGlobal[clave]) ? mapaRecursosGlobal[clave] : p.recursosArgumentacion;
+      return rec && rec.length > 0 ? { ...p, recursosArgumentacion: rec } : p;
+    });
+
+    const notasExamen =
+      Array.isArray(ex.anotaciones) && ex.anotaciones.length > 0
+        ? ex.anotaciones
+        : Array.isArray(anotacionesPorExamen[ex.id])
+        ? anotacionesPorExamen[ex.id]
+        : undefined;
+
+    if (notasExamen && notasExamen.length > 0 && !anotacionesPorExamen[ex.id]) {
+      anotacionesPorExamen[ex.id] = notasExamen;
+    }
+
+    return {
+      ...ex,
+      preguntas: preguntasEnriquecidas,
+      anotaciones: notasExamen,
+    };
+  };
+
+  // 4. Consolidar Banco de Exámenes (precargados no eliminados + almacenamiento + estado vivo en React)
+  const mapaBanco = new Map<string, ExamenCompleto>();
+  EXAMENES_PRECARGADOS_OFICIALES.forEach((prec) => {
+    if (prec && prec.id && !setEliminados.has(prec.id)) {
+      mapaBanco.set(prec.id, prec);
     }
   });
 
-  // Recopilar items del almacén de dudas (usar parámetro o leer de localStorage)
-  let almacenDudas: ItemAlmacenDuda[] = almacenDudasOpcional || [];
-  if (!almacenDudasOpcional || almacenDudasOpcional.length === 0) {
-    try {
-      const rawDudas = localStorage.getItem('c1_almacen_dudas');
-      if (rawDudas) almacenDudas = JSON.parse(rawDudas);
-    } catch (_) {}
+  const bancoPersistido = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_banco_examenes', []);
+  if (Array.isArray(bancoPersistido)) {
+    bancoPersistido.forEach((ex) => {
+      if (ex && ex.id && !setEliminados.has(ex.id)) {
+        mapaBanco.set(ex.id, ex);
+      }
+    });
   }
 
-  const almacenDudasEnriquecido = almacenDudas.map((it) => {
-    const rec = obtenerRecursosArgumentacionDePregunta(it);
-    return rec.length > 0 ? { ...it, recursosArgumentacion: rec } : it;
+  const bancoEntrada =
+    historialOpcional !== undefined
+      ? bancoOExamenes
+      : (bancoOExamenes || []).filter((e) => !e.resultado);
+
+  (bancoEntrada || []).forEach((ex) => {
+    if (ex && ex.id && !setEliminados.has(ex.id)) {
+      mapaBanco.set(ex.id, ex);
+    }
   });
 
-  // Recopilar enlaces y metadatos de la Base de Datos de Documentos de Biblioteca (estrictamente sin archivos binarios)
-  const bibliotecaDocumentos = (
-    bibliotecaDocumentosOpcional && bibliotecaDocumentosOpcional.length > 0
+  const bancoExamenes = Array.from(mapaBanco.values()).map(enriquecerExamenCompleto);
+
+  // 5. Consolidar Historial de Pruebas Realizadas (almacenamiento + estado vivo en React)
+  const mapaHistorial = new Map<string, ExamenCompleto>();
+  const historialPersistido = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_historial_pruebas', []);
+  if (Array.isArray(historialPersistido)) {
+    historialPersistido.forEach((h) => {
+      if (h && h.id) {
+        mapaHistorial.set(h.id, h);
+      }
+    });
+  }
+
+  const historialEntrada =
+    historialOpcional !== undefined
+      ? historialOpcional
+      : (bancoOExamenes || []).filter((e) => !!e.resultado);
+
+  (historialEntrada || []).forEach((h) => {
+    if (h && h.id) {
+      mapaHistorial.set(h.id, h);
+    }
+  });
+
+  const historialPruebas = Array.from(mapaHistorial.values()).map(enriquecerExamenCompleto);
+
+  // 6. Consolidar Almacén de Dudas, Notas, Plazos, Mnemotecnia e Informática
+  const dudasBase =
+    almacenDudasOpcional !== undefined
+      ? almacenDudasOpcional
+      : leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
+
+  const mapaDudas = new Map<string, ItemAlmacenDuda>();
+  if (almacenDudasOpcional === undefined) {
+    (dudasBase || []).forEach((it) => {
+      if (it && it.id) mapaDudas.set(it.id, it);
+    });
+  } else {
+    // Si el estado vivo tiene elementos los priorizamos, y si el almacenamiento persistente tenía elementos adicionales por escritura directa los sumamos si no hay colisión
+    (dudasBase || []).forEach((it) => {
+      if (it && it.id) mapaDudas.set(it.id, it);
+    });
+    if (mapaDudas.size === 0) {
+      const dudasPersistidas = leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
+      if (Array.isArray(dudasPersistidas)) {
+        dudasPersistidas.forEach((it) => {
+          if (it && it.id) mapaDudas.set(it.id, it);
+        });
+      }
+    }
+  }
+
+  const almacenDudasEnriquecido = Array.from(mapaDudas.values()).map((it) => {
+    if (Array.isArray(it.recursosArgumentacion) && it.recursosArgumentacion.length > 0) {
+      registrarRecursosDeItem(it.enunciado, it.recursosArgumentacion);
+    }
+    const clave = normalizarClaveRecursoPregunta(it.enunciado);
+    const rec = clave && Array.isArray(mapaRecursosGlobal[clave]) ? mapaRecursosGlobal[clave] : it.recursosArgumentacion;
+    return rec && rec.length > 0 ? { ...it, recursosArgumentacion: rec } : it;
+  });
+
+  // 7. Consolidar Base de Datos de Documentos y Enlaces de Biblioteca (estrictamente sin archivos binarios) + Subtemas
+  const docsOrigen =
+    bibliotecaDocumentosOpcional !== undefined && bibliotecaDocumentosOpcional.length > 0
       ? bibliotecaDocumentosOpcional
-      : leerBibliotecaDocumentosDeLocalStorage()
-  )
-    .map((d) => sanitizarDocumentoBibliotecaSinBinarios(d))
-    .filter((d): d is DocumentoBibliotecaItem => d !== null);
+      : leerBibliotecaDocumentosDeLocalStorage();
+
+  const mapaDocsBib = new Map<string, DocumentoBibliotecaItem>();
+  (docsOrigen || []).forEach((d) => {
+    if (d) {
+      const limpio = sanitizarDocumentoBibliotecaSinBinarios(d);
+      mapaDocsBib.set(limpio.id, limpio);
+    }
+  });
+  const bibliotecaDocumentos = Array.from(mapaDocsBib.values());
 
   const subtemasBiblioteca =
-    subtemasBibliotecaOpcional && subtemasBibliotecaOpcional.length > 0
+    subtemasBibliotecaOpcional !== undefined && subtemasBibliotecaOpcional.length > 0
       ? guardarSubtemasBibliotecaEnLocalStorage(subtemasBibliotecaOpcional)
       : leerSubtemasBibliotecaDeLocalStorage();
 
-  const recursosArgumentacionPorPregunta = leerMapaRecursosArgumentacionGlobal();
-  const totalRecursosArgumentacion = Object.values(recursosArgumentacionPorPregunta).reduce(
+  // Contabilizar recursos y anotaciones totales tras cosecha completa
+  const totalRecursosArgumentacion = Object.values(mapaRecursosGlobal).reduce(
     (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
     0
   );
+  const totalAnotaciones = Object.values(anotacionesPorExamen).reduce(
+    (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
+    0
+  );
+  const totalPreguntasBanco = bancoExamenes.reduce(
+    (acc, ex) => acc + (Array.isArray(ex.preguntas) ? ex.preguntas.length : 0),
+    0
+  );
 
-  // Recopilar control de preguntas superadas/falladas
-  let controlPreguntasSuperadas: Record<string, any> = {};
-  try {
-    const rawSuperadas = localStorage.getItem('c1_preguntas_superadas_v1');
-    if (rawSuperadas) {
-      const parsedSup = JSON.parse(rawSuperadas);
-      if (parsedSup && typeof parsedSup === 'object') {
-        controlPreguntasSuperadas = parsedSup;
+  // 8. Control de preguntas superadas/falladas, preguntas recientes, descargas PDF y sesión activa
+  const controlPreguntasSuperadas = leerDatoPersistenteSincrono<Record<string, any>>(
+    'c1_preguntas_superadas_v1',
+    {}
+  );
+  const historialPreguntasRecientes = leerDatoPersistenteSincrono<string[]>(
+    'c1_historial_preguntas_recientes',
+    []
+  );
+  const testsDescargadosPDF = leerDatoPersistenteSincrono<any[]>('c1_tests_descargados_pdf', []);
+  const sesionExamenActiva = leerDatoPersistenteSincrono<any>('c1_active_exam_session', null);
+
+  // 9. Configuración completa y captura auxiliar de cualquier clave c1_* adicional
+  let darkMode = false;
+  let autoAvanceAlFinal: boolean | undefined = undefined;
+  let cortePropioTest: string | undefined = undefined;
+  let cortePropioSupuesto: string | undefined = undefined;
+  let usarCortePropio: boolean | undefined = undefined;
+  let geminiApiKey: string | undefined = undefined;
+  let geminiSelectedModel: string | undefined = undefined;
+  let modoLecturaTamano: string | undefined = undefined;
+  const clavesAdicionalesLocalStorage: Record<string, string> = {};
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      darkMode = localStorage.getItem('c1_dark_mode') === 'true';
+      const autoAvanceRaw = localStorage.getItem('c1_auto_avance_al_final');
+      autoAvanceAlFinal = autoAvanceRaw !== null ? autoAvanceRaw === 'true' : undefined;
+      cortePropioTest = localStorage.getItem('c1_corte_propio_test') || undefined;
+      cortePropioSupuesto = localStorage.getItem('c1_corte_propio_supuesto') || undefined;
+      const usarCortePropioRaw = localStorage.getItem('c1_usar_corte_propio');
+      usarCortePropio = usarCortePropioRaw !== null ? usarCortePropioRaw === 'true' : undefined;
+      geminiApiKey =
+        localStorage.getItem('c1_custom_gemini_api_key') ||
+        localStorage.getItem('gemini_custom_api_key') ||
+        undefined;
+      geminiSelectedModel = localStorage.getItem('c1_selected_gemini_model') || undefined;
+      modoLecturaTamano = localStorage.getItem('c1_modo_lectura_tamano') || undefined;
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (
+          k &&
+          k.startsWith('c1_') &&
+          !k.startsWith('c1_anotaciones_') &&
+          !CLAVES_TOP_LEVEL_GESTIONADAS.has(k)
+        ) {
+          const v = localStorage.getItem(k);
+          if (v !== null) {
+            clavesAdicionalesLocalStorage[k] = v;
+          }
+        }
       }
-    }
-  } catch (_) {}
-
-  // Recopilar IDs de exámenes eliminados y preguntas recientes
-  let examenesEliminadosIds: string[] = [];
-  try {
-    const rawEliminados = localStorage.getItem('c1_examenes_eliminados');
-    if (rawEliminados) {
-      const parsedElim = JSON.parse(rawEliminados);
-      if (Array.isArray(parsedElim)) examenesEliminadosIds = parsedElim;
-    }
-  } catch (_) {}
-
-  let historialPreguntasRecientes: string[] = [];
-  try {
-    const rawRecientes = localStorage.getItem('c1_historial_preguntas_recientes');
-    if (rawRecientes) {
-      const parsedRec = JSON.parse(rawRecientes);
-      if (Array.isArray(parsedRec)) historialPreguntasRecientes = parsedRec;
-    }
-  } catch (_) {}
-
-  let testsDescargadosPDF: any[] = [];
-  try {
-    const rawDescargados = localStorage.getItem('c1_tests_descargados_pdf');
-    if (rawDescargados) {
-      const parsedDesc = JSON.parse(rawDescargados);
-      if (Array.isArray(parsedDesc)) testsDescargadosPDF = parsedDesc;
-    }
-  } catch (_) {}
-
-  const darkMode = localStorage.getItem('c1_dark_mode') === 'true';
-  const autoAvanceRaw = localStorage.getItem('c1_auto_avance_al_final');
-  const autoAvanceAlFinal = autoAvanceRaw !== null ? autoAvanceRaw === 'true' : undefined;
-  const cortePropioTest = localStorage.getItem('c1_corte_propio_test') || undefined;
-  const cortePropioSupuesto = localStorage.getItem('c1_corte_propio_supuesto') || undefined;
-  const usarCortePropioRaw = localStorage.getItem('c1_usar_corte_propio');
-  const usarCortePropio = usarCortePropioRaw !== null ? usarCortePropioRaw === 'true' : undefined;
-  const geminiApiKey = localStorage.getItem('gemini_custom_api_key') || undefined;
+    } catch (_) {}
+  }
 
   const backup: CopiaSeguridadIntegral = {
     tipo: 'copia_seguridad_simulador_c1',
-    version: '3.2',
+    version: '3.7',
     fecha: new Date().toISOString(),
     metadata: {
       totalBancoExamenes: bancoExamenes.length,
+      totalPreguntasBanco,
       totalHistorialPruebas: historialPruebas.length,
       totalExamenes: bancoExamenes.length + historialPruebas.length,
       totalAnotaciones,
@@ -3542,21 +3764,23 @@ export async function descargarCopiaSeguridadCompleta(
       totalDocumentosBiblioteca: bibliotecaDocumentos.length,
       totalSubtemasBiblioteca: subtemasBiblioteca.length,
       totalRecursosArgumentacion,
-      totalPreguntasControlFalladas: Object.keys(controlPreguntasSuperadas).length,
+      totalPreguntasControlFalladas: Object.keys(controlPreguntasSuperadas || {}).length,
       timestamp: Date.now(),
     },
     bancoExamenes,
     historialPruebas,
-    examenesGuardados: [...bancoExamenes, ...historialPruebas],
     anotacionesPorExamen,
     almacenDudas: almacenDudasEnriquecido,
     bibliotecaDocumentos,
     subtemasBiblioteca,
-    recursosArgumentacionPorPregunta,
-    controlPreguntasSuperadas,
+    recursosArgumentacionPorPregunta: mapaRecursosGlobal,
+    controlPreguntasSuperadas: controlPreguntasSuperadas || {},
     examenesEliminadosIds,
-    historialPreguntasRecientes,
-    testsDescargadosPDF,
+    historialPreguntasRecientes: Array.isArray(historialPreguntasRecientes) ? historialPreguntasRecientes : [],
+    testsDescargadosPDF: Array.isArray(testsDescargadosPDF) ? testsDescargadosPDF : [],
+    sesionExamenActiva: sesionExamenActiva || undefined,
+    clavesAdicionalesLocalStorage:
+      Object.keys(clavesAdicionalesLocalStorage).length > 0 ? clavesAdicionalesLocalStorage : undefined,
     configuracion: {
       darkMode,
       autoAvanceAlFinal,
@@ -3564,22 +3788,59 @@ export async function descargarCopiaSeguridadCompleta(
       cortePropioSupuesto,
       usarCortePropio,
       geminiApiKey,
+      geminiSelectedModel,
+      modoLecturaTamano,
     },
   };
 
-  const dataString = JSON.stringify(backup, null, 2);
+  // Si hay gran volumen de exámenes/historial evitamos inflar innecesariamente con espacios repetidos para máxima fluidez y fiabilidad de escritura
+  const totalExamenesGlobal = bancoExamenes.length + historialPruebas.length;
+  const dataString =
+    totalExamenesGlobal > 60 ? JSON.stringify(backup) : JSON.stringify(backup, null, 2);
+
   const fechaStr = new Date().toISOString().split('T')[0];
   const nombreSugerido = `Copia_Seguridad_Simulador_C1_${fechaStr}.json`;
 
-  return await guardarArchivoConSelectorCarpeta(dataString, nombreSugerido, 'application/json', '.json');
+  const guardado = await guardarArchivoConSelectorCarpeta(
+    dataString,
+    nombreSugerido,
+    'application/json',
+    '.json'
+  );
+
+  if (!guardado) {
+    return { ok: false };
+  }
+
+  const tamanoBytes = new Blob([dataString], { type: 'application/json;charset=utf-8' }).size;
+  return {
+    ok: true,
+    resumen: {
+      totalBancoExamenes: bancoExamenes.length,
+      totalPreguntasBanco,
+      totalHistorialPruebas: historialPruebas.length,
+      totalDudasAlmacen: almacenDudasEnriquecido.length,
+      totalDocumentosBiblioteca: bibliotecaDocumentos.length,
+      totalSubtemasBiblioteca: subtemasBiblioteca.length,
+      totalRecursosArgumentacion,
+      totalAnotaciones,
+      totalPreguntasControlFalladas: Object.keys(controlPreguntasSuperadas || {}).length,
+      tamanoBytes,
+      nombreArchivo: nombreSugerido,
+    },
+  };
 }
 
 /**
- * Procesa y restaura una Copia de Seguridad Integral Única desde un archivo JSON/TXT
- * restaurando todos los aspectos de la aplicación: Banco, Historial, Biblioteca (Dudas + Enlaces + Subtemas),
- * Recursos de Argumentación, Anotaciones, Control de Preguntas Falladas/Superadas y Configuración.
+ * Procesa y restaura íntegramente una Copia de Seguridad Integral Única desde un archivo JSON/TXT
+ * restaurando todos los aspectos de la aplicación sin pérdida de campos ni truncado por cuota:
+ * Banco de Exámenes, Historial de Pruebas, Biblioteca (Dudas + Notas + Enlaces + Subtemas),
+ * Recursos de Argumentación, Anotaciones, Control de Falladas/Superadas, Sesión y Configuración.
  */
-export function restaurarCopiaSeguridadCompleta(rawText: string): {
+export function restaurarCopiaSeguridadCompleta(
+  rawText: string,
+  opciones?: { modo?: 'fusionar' | 'reemplazar' }
+): {
   bancoExamenes: ExamenCompleto[];
   historialPruebas: ExamenCompleto[];
   examenes: ExamenCompleto[];
@@ -3588,108 +3849,146 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
   subtemasBiblioteca: string[];
   examenesEliminadosIds: string[];
   darkModeRestaurado?: boolean;
+  modoLecturaTamanoRestaurado?: string;
   anotacionesRestauradas: number;
+  recursosRestaurados: number;
 } {
+  const modo = opciones?.modo || 'fusionar';
   const cleaned = limpiarTextoJSON(rawText);
   let parsed: any;
   try {
     parsed = JSON.parse(cleaned);
-  } catch (err: any) {
+  } catch (_) {
     throw new Error('El archivo de copia de seguridad no contiene un formato JSON válido.');
   }
 
-  let bancoExamenes: ExamenCompleto[] = [];
-  let historialPruebas: ExamenCompleto[] = [];
+  let bancoImportado: ExamenCompleto[] = [];
+  let historialImportado: ExamenCompleto[] = [];
   let anotacionesCount = 0;
+  let recursosCount = 0;
 
+  // 1. Restaurar recursos de argumentación por pregunta
   if (parsed.recursosArgumentacionPorPregunta && typeof parsed.recursosArgumentacionPorPregunta === 'object') {
-    const mapaActual = leerMapaRecursosArgumentacionGlobal();
+    const mapaBase = modo === 'reemplazar' ? {} : leerMapaRecursosArgumentacionGlobal();
     Object.entries(parsed.recursosArgumentacionPorPregunta).forEach(([clave, lista]) => {
       if (Array.isArray(lista) && lista.length > 0) {
-        mapaActual[clave] = lista as RecursoArgumentacionPregunta[];
+        mapaBase[clave] = lista as RecursoArgumentacionPregunta[];
+        recursosCount += lista.length;
       }
     });
-    guardarEnLocalStorageSeguro(STORAGE_KEY_RECURSOS_ARGUMENTACION, mapaActual);
+    guardarEnLocalStorageSeguro(STORAGE_KEY_RECURSOS_ARGUMENTACION, mapaBase);
   }
 
+  // 2. Restaurar control de preguntas superadas/falladas
   if (parsed.controlPreguntasSuperadas && typeof parsed.controlPreguntasSuperadas === 'object') {
-    try {
-      const actualRaw = localStorage.getItem('c1_preguntas_superadas_v1');
-      const actualObj = actualRaw ? JSON.parse(actualRaw) : {};
-      const fusionado = { ...actualObj, ...parsed.controlPreguntasSuperadas };
-      guardarEnLocalStorageSeguro('c1_preguntas_superadas_v1', fusionado);
-    } catch (_) {}
+    const actualObj =
+      modo === 'reemplazar'
+        ? {}
+        : leerDatoPersistenteSincrono<Record<string, any>>('c1_preguntas_superadas_v1', {});
+    const fusionado = { ...actualObj, ...parsed.controlPreguntasSuperadas };
+    guardarEnLocalStorageSeguro('c1_preguntas_superadas_v1', fusionado);
   }
 
-  let examenesEliminadosIds: string[] = [];
-  try {
-    const rawElim = localStorage.getItem('c1_examenes_eliminados');
-    if (rawElim) {
-      const parsedElim = JSON.parse(rawElim);
-      if (Array.isArray(parsedElim)) examenesEliminadosIds = parsedElim;
-    }
-  } catch (_) {}
+  // 3. Restaurar IDs de exámenes eliminados
+  let examenesEliminadosIds: string[] =
+    modo === 'reemplazar'
+      ? []
+      : leerDatoPersistenteSincrono<string[]>('c1_examenes_eliminados', []);
 
   if (Array.isArray(parsed.examenesEliminadosIds)) {
-    examenesEliminadosIds = Array.from(new Set([...examenesEliminadosIds, ...parsed.examenesEliminadosIds]));
+    examenesEliminadosIds = Array.from(
+      new Set([...(Array.isArray(examenesEliminadosIds) ? examenesEliminadosIds : []), ...parsed.examenesEliminadosIds])
+    );
     guardarEnLocalStorageSeguro('c1_examenes_eliminados', examenesEliminadosIds);
   }
+  const setEliminados = new Set(examenesEliminadosIds);
 
+  // 4. Restaurar historial de preguntas recientes, tests descargados PDF y sesión activa
   if (Array.isArray(parsed.historialPreguntasRecientes)) {
     guardarEnLocalStorageSeguro('c1_historial_preguntas_recientes', parsed.historialPreguntasRecientes);
   }
 
   if (Array.isArray(parsed.testsDescargadosPDF)) {
+    const actualArr =
+      modo === 'reemplazar'
+        ? []
+        : leerDatoPersistenteSincrono<any[]>('c1_tests_descargados_pdf', []);
+    const mapaIds = new Map<string, any>();
+    [...(Array.isArray(actualArr) ? actualArr : []), ...parsed.testsDescargadosPDF].forEach((it) => {
+      if (it && it.id) mapaIds.set(it.id, it);
+    });
+    guardarEnLocalStorageSeguro('c1_tests_descargados_pdf', Array.from(mapaIds.values()).slice(0, 80));
+  }
+
+  if (parsed.sesionExamenActiva && typeof parsed.sesionExamenActiva === 'object') {
+    guardarEnLocalStorageSeguro('c1_active_exam_session', parsed.sesionExamenActiva);
+  }
+
+  if (parsed.clavesAdicionalesLocalStorage && typeof parsed.clavesAdicionalesLocalStorage === 'object') {
+    Object.entries(parsed.clavesAdicionalesLocalStorage).forEach(([k, v]) => {
+      if (k.startsWith('c1_') && typeof v === 'string') {
+        try {
+          localStorage.setItem(k, v);
+        } catch (_) {}
+      }
+    });
+  }
+
+  // 5. Restaurar Configuración completa
+  let darkModeRestaurado: boolean | undefined = undefined;
+  let modoLecturaTamanoRestaurado: string | undefined = undefined;
+  if (parsed.configuracion && typeof parsed.configuracion === 'object') {
     try {
-      const actualRaw = localStorage.getItem('c1_tests_descargados_pdf');
-      const actualArr = actualRaw ? JSON.parse(actualRaw) : [];
-      const mapaIds = new Map<string, any>();
-      [...parsed.testsDescargadosPDF, ...(Array.isArray(actualArr) ? actualArr : [])].forEach((it) => {
-        if (it && it.id) mapaIds.set(it.id, it);
-      });
-      guardarEnLocalStorageSeguro('c1_tests_descargados_pdf', Array.from(mapaIds.values()).slice(0, 40));
+      if (typeof parsed.configuracion.darkMode === 'boolean') {
+        darkModeRestaurado = parsed.configuracion.darkMode;
+        localStorage.setItem('c1_dark_mode', String(parsed.configuracion.darkMode));
+      }
+      if (typeof parsed.configuracion.autoAvanceAlFinal === 'boolean') {
+        localStorage.setItem('c1_auto_avance_al_final', String(parsed.configuracion.autoAvanceAlFinal));
+      }
+      if (typeof parsed.configuracion.cortePropioTest === 'string') {
+        localStorage.setItem('c1_corte_propio_test', parsed.configuracion.cortePropioTest);
+      }
+      if (typeof parsed.configuracion.cortePropioSupuesto === 'string') {
+        localStorage.setItem('c1_corte_propio_supuesto', parsed.configuracion.cortePropioSupuesto);
+      }
+      if (typeof parsed.configuracion.usarCortePropio === 'boolean') {
+        localStorage.setItem('c1_usar_corte_propio', String(parsed.configuracion.usarCortePropio));
+      }
+      if (parsed.configuracion.geminiApiKey) {
+        localStorage.setItem('c1_custom_gemini_api_key', parsed.configuracion.geminiApiKey);
+        localStorage.setItem('gemini_custom_api_key', parsed.configuracion.geminiApiKey);
+      }
+      if (parsed.configuracion.geminiSelectedModel) {
+        localStorage.setItem('c1_selected_gemini_model', parsed.configuracion.geminiSelectedModel);
+      }
+      if (parsed.configuracion.modoLecturaTamano) {
+        modoLecturaTamanoRestaurado = parsed.configuracion.modoLecturaTamano;
+        localStorage.setItem('c1_modo_lectura_tamano', parsed.configuracion.modoLecturaTamano);
+      }
     } catch (_) {}
   }
 
-  let darkModeRestaurado: boolean | undefined = undefined;
-  if (parsed.configuracion && typeof parsed.configuracion === 'object') {
-    if (typeof parsed.configuracion.darkMode === 'boolean') {
-      darkModeRestaurado = parsed.configuracion.darkMode;
-      localStorage.setItem('c1_dark_mode', String(parsed.configuracion.darkMode));
-    }
-    if (typeof parsed.configuracion.autoAvanceAlFinal === 'boolean') {
-      localStorage.setItem('c1_auto_avance_al_final', String(parsed.configuracion.autoAvanceAlFinal));
-    }
-    if (typeof parsed.configuracion.cortePropioTest === 'string') {
-      localStorage.setItem('c1_corte_propio_test', parsed.configuracion.cortePropioTest);
-    }
-    if (typeof parsed.configuracion.cortePropioSupuesto === 'string') {
-      localStorage.setItem('c1_corte_propio_supuesto', parsed.configuracion.cortePropioSupuesto);
-    }
-    if (typeof parsed.configuracion.usarCortePropio === 'boolean') {
-      localStorage.setItem('c1_usar_corte_propio', String(parsed.configuracion.usarCortePropio));
-    }
-    if (parsed.configuracion.geminiApiKey) {
-      localStorage.setItem('gemini_custom_api_key', parsed.configuracion.geminiApiKey);
-    }
-  }
+  // 6. Extraer Banco e Historial preservando 100% de metadatos y resultados
+  const convertirSinPerdida = (item: any): ExamenCompleto =>
+    validarYConvertirJSON(item, { preservarResultadoIntegro: true });
 
-  // Caso A: Copia v2.5 / v2.6 / v3.2 con bancoExamenes e historialPruebas separados
+  // Caso A: Copia v2.5 / v2.6 / v3.2 / v3.7 con bancoExamenes e historialPruebas separados
   if (
     parsed.tipo === 'copia_seguridad_simulador_c1' &&
     (Array.isArray(parsed.bancoExamenes) || Array.isArray(parsed.historialPruebas))
   ) {
     if (Array.isArray(parsed.bancoExamenes)) {
-      bancoExamenes = parsed.bancoExamenes.map((item: any) => validarYConvertirJSON(item));
+      bancoImportado = parsed.bancoExamenes.map(convertirSinPerdida);
     }
     if (Array.isArray(parsed.historialPruebas)) {
-      historialPruebas = parsed.historialPruebas.map((item: any) => validarYConvertirJSON(item));
+      historialImportado = parsed.historialPruebas.map(convertirSinPerdida);
     }
 
     if (parsed.anotacionesPorExamen && typeof parsed.anotacionesPorExamen === 'object') {
       Object.entries(parsed.anotacionesPorExamen).forEach(([examId, notas]) => {
         if (Array.isArray(notas)) {
-          localStorage.setItem(`c1_anotaciones_${examId}`, JSON.stringify(notas));
+          guardarEnLocalStorageSeguro(`c1_anotaciones_${examId}`, notas);
           anotacionesCount += notas.length;
         }
       });
@@ -3697,14 +3996,14 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
   }
   // Caso B: Copia v1.0 con examenesGuardados
   else if (parsed.tipo === 'copia_seguridad_simulador_c1' && Array.isArray(parsed.examenesGuardados)) {
-    const todos = parsed.examenesGuardados.map((item: any) => validarYConvertirJSON(item));
-    historialPruebas = todos.filter((e: ExamenCompleto) => !!e.resultado);
-    bancoExamenes = todos.filter((e: ExamenCompleto) => !e.resultado);
+    const todos = parsed.examenesGuardados.map(convertirSinPerdida);
+    historialImportado = todos.filter((e: ExamenCompleto) => !!e.resultado);
+    bancoImportado = todos.filter((e: ExamenCompleto) => !e.resultado);
 
     if (parsed.anotacionesPorExamen && typeof parsed.anotacionesPorExamen === 'object') {
       Object.entries(parsed.anotacionesPorExamen).forEach(([examId, notas]) => {
         if (Array.isArray(notas)) {
-          localStorage.setItem(`c1_anotaciones_${examId}`, JSON.stringify(notas));
+          guardarEnLocalStorageSeguro(`c1_anotaciones_${examId}`, notas);
           anotacionesCount += notas.length;
         }
       });
@@ -3712,52 +4011,114 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
   }
   // Caso C: Array simple de exámenes
   else if (Array.isArray(parsed)) {
-    const todos = parsed.map((item: any) => validarYConvertirJSON(item));
-    historialPruebas = todos.filter((e: ExamenCompleto) => !!e.resultado);
-    bancoExamenes = todos.filter((e: ExamenCompleto) => !e.resultado);
+    const todos = parsed.map(convertirSinPerdida);
+    historialImportado = todos.filter((e: ExamenCompleto) => !!e.resultado);
+    bancoImportado = todos.filter((e: ExamenCompleto) => !e.resultado);
   }
   // Caso D: Un único examen
   else if (parsed.titulo && parsed.preguntas) {
-    const unExamen = validarYConvertirJSON(parsed);
+    const unExamen = convertirSinPerdida(parsed);
     if (unExamen.resultado) {
-      historialPruebas = [unExamen];
+      historialImportado = [unExamen];
     } else {
-      bancoExamenes = [unExamen];
+      bancoImportado = [unExamen];
     }
-  } else if (Array.isArray(parsed.bibliotecaDocumentos) || Array.isArray(parsed.almacenDudas)) {
-    // Caso E: Retrocompatibilidad con archivos JSON previos de Biblioteca; conservamos banco e historial actuales
-    try {
-      const savedBanco = localStorage.getItem('c1_banco_examenes');
-      if (savedBanco) {
-        const parsedB = JSON.parse(savedBanco);
-        if (Array.isArray(parsedB)) bancoExamenes = parsedB;
-      }
-      const savedHist = localStorage.getItem('c1_historial_pruebas');
-      if (savedHist) {
-        const parsedH = JSON.parse(savedHist);
-        if (Array.isArray(parsedH)) historialPruebas = parsedH;
-      }
-    } catch (_) {}
+  }
+  // Caso E: Retrocompatibilidad con archivos JSON previos de Biblioteca
+  else if (Array.isArray(parsed.bibliotecaDocumentos) || Array.isArray(parsed.almacenDudas)) {
+    bancoImportado = [];
+    historialImportado = [];
   } else {
     throw new Error('El archivo no tiene la estructura de una copia de seguridad ni de examen oficial.');
   }
 
-  const almacenDudasRestauradas = fusionarAlmacenDudasEnLocalStorage(
-    Array.isArray(parsed.almacenDudas) ? parsed.almacenDudas : undefined
-  );
+  // 7. Consolidar Banco e Historial según modo ('fusionar' conserva datos locales + aplica copia; 'reemplazar' deja exactamente la copia)
+  const mapaBancoFinal = new Map<string, ExamenCompleto>();
+  EXAMENES_PRECARGADOS_OFICIALES.forEach((prec) => {
+    if (prec && prec.id && !setEliminados.has(prec.id)) {
+      mapaBancoFinal.set(prec.id, asegurarSeparacionYNormativaReserva(prec));
+    }
+  });
 
-  const bibliotecaDocumentosRestaurados = fusionarBibliotecaDocumentosEnLocalStorage(
-    Array.isArray(parsed.bibliotecaDocumentos) ? parsed.bibliotecaDocumentos : undefined
-  );
+  if (modo === 'fusionar') {
+    const bancoExistente = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_banco_examenes', []);
+    if (Array.isArray(bancoExistente)) {
+      bancoExistente.forEach((ex) => {
+        if (ex && ex.id && !setEliminados.has(ex.id)) {
+          mapaBancoFinal.set(ex.id, ex);
+        }
+      });
+    }
+  }
+  bancoImportado.forEach((ex) => {
+    if (ex && ex.id && !setEliminados.has(ex.id)) {
+      mapaBancoFinal.set(ex.id, ex);
+    }
+  });
+  const bancoExamenes = Array.from(mapaBancoFinal.values());
 
-  const subtemasBibliotecaRestaurados = fusionarSubtemasBibliotecaEnLocalStorage(
-    Array.isArray(parsed.subtemasBiblioteca) ? parsed.subtemasBiblioteca : undefined
-  );
+  const mapaHistorialFinal = new Map<string, ExamenCompleto>();
+  if (modo === 'fusionar') {
+    const histExistente = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_historial_pruebas', []);
+    if (Array.isArray(histExistente)) {
+      histExistente.forEach((h) => {
+        if (h && h.id) {
+          mapaHistorialFinal.set(h.id, h);
+        }
+      });
+    }
+  }
+  historialImportado.forEach((h) => {
+    if (h && h.id) {
+      mapaHistorialFinal.set(h.id, h);
+    }
+  });
+  const historialPruebas = Array.from(mapaHistorialFinal.values());
 
-  // Guardar anotaciones internas de los exámenes
+  // 8. Consolidar Biblioteca: Almacén de Dudas, Base de Datos de Documentos/Enlaces y Subtemas
+  let almacenDudasRestauradas: ItemAlmacenDuda[];
+  if (modo === 'reemplazar' && Array.isArray(parsed.almacenDudas)) {
+    almacenDudasRestauradas = parsed.almacenDudas.map((it: ItemAlmacenDuda) => {
+      if (Array.isArray(it.recursosArgumentacion) && it.recursosArgumentacion.length > 0 && it.enunciado) {
+        guardarRecursosArgumentacionDePregunta(it.enunciado, it.recursosArgumentacion);
+      }
+      return {
+        ...it,
+        id: it.id || `duda-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      };
+    });
+    guardarEnLocalStorageSeguro('c1_almacen_dudas', almacenDudasRestauradas);
+  } else {
+    almacenDudasRestauradas = fusionarAlmacenDudasEnLocalStorage(
+      Array.isArray(parsed.almacenDudas) ? parsed.almacenDudas : undefined
+    );
+  }
+
+  let bibliotecaDocumentosRestaurados: DocumentoBibliotecaItem[];
+  if (modo === 'reemplazar' && Array.isArray(parsed.bibliotecaDocumentos)) {
+    bibliotecaDocumentosRestaurados = guardarBibliotecaDocumentosEnLocalStorage(parsed.bibliotecaDocumentos);
+  } else {
+    bibliotecaDocumentosRestaurados = fusionarBibliotecaDocumentosEnLocalStorage(
+      Array.isArray(parsed.bibliotecaDocumentos) ? parsed.bibliotecaDocumentos : undefined
+    );
+  }
+
+  let subtemasBibliotecaRestaurados: string[];
+  if (modo === 'reemplazar' && Array.isArray(parsed.subtemasBiblioteca)) {
+    subtemasBibliotecaRestaurados = guardarSubtemasBibliotecaEnLocalStorage(parsed.subtemasBiblioteca);
+  } else {
+    subtemasBibliotecaRestaurados = fusionarSubtemasBibliotecaEnLocalStorage(
+      Array.isArray(parsed.subtemasBiblioteca) ? parsed.subtemasBiblioteca : undefined
+    );
+  }
+
+  // 9. Persistir Banco, Historial y anotaciones embebidas de forma íntegra (IndexedDB + memoria + localStorage)
+  guardarEnLocalStorageSeguro('c1_banco_examenes', bancoExamenes);
+  guardarEnLocalStorageSeguro('c1_historial_pruebas', historialPruebas);
+
   [...bancoExamenes, ...historialPruebas].forEach((ex) => {
     if (ex.anotaciones && ex.anotaciones.length > 0) {
-      localStorage.setItem(`c1_anotaciones_${ex.id}`, JSON.stringify(ex.anotaciones));
+      guardarEnLocalStorageSeguro(`c1_anotaciones_${ex.id}`, ex.anotaciones);
       anotacionesCount += ex.anotaciones.length;
     }
   });
@@ -3771,45 +4132,18 @@ export function restaurarCopiaSeguridadCompleta(rawText: string): {
     subtemasBiblioteca: subtemasBibliotecaRestaurados,
     examenesEliminadosIds,
     darkModeRestaurado,
+    modoLecturaTamanoRestaurado,
     anotacionesRestauradas: anotacionesCount,
+    recursosRestaurados: recursosCount,
   };
 }
 
 /**
- * Guarda datos en localStorage de forma segura y blindada contra QuotaExceededError.
- * Si se alcanza el límite del almacenamiento, realiza una purga de datos volátiles/temporales
- * y reintenta la operación sin interrumpir el flujo ni romper la aplicación.
+ * Guarda datos de forma 100% íntegra en IndexedDB + Caché en Memoria + localStorage,
+ * SIN recortar ni truncar jamás colecciones de usuario cuando localStorage alcance su tope de 5MB.
  */
 export function guardarEnLocalStorageSeguro(key: string, data: any): boolean {
-  if (typeof window === 'undefined' || !window.localStorage) return false;
-  try {
-    const serialized = JSON.stringify(data);
-    localStorage.setItem(key, serialized);
-    return true;
-  } catch (err: any) {
-    console.warn(`[Storage] Excedido límite al guardar "${key}" en localStorage:`, err);
-    try {
-      // 1. Limpieza de claves temporales, de sesión o heredadas
-      localStorage.removeItem('c1_active_exam_session');
-      localStorage.removeItem('c1_examenes_guardados'); // clave legacy pesada
-      localStorage.removeItem('c1_historial_preguntas_recientes');
-
-      // 2. Reintentar guardar
-      const serialized = JSON.stringify(data);
-      localStorage.setItem(key, serialized);
-      return true;
-    } catch (retryErr) {
-      console.warn(`[Storage] Reintento tras purga falló para "${key}":`, retryErr);
-      // 3. Si sigue fallando por cuota, podar elementos antiguos si es un array
-      if (Array.isArray(data)) {
-        try {
-          const podado = data.slice(0, 25);
-          localStorage.setItem(key, JSON.stringify(podado));
-          return true;
-        } catch (_) {}
-      }
-      return false;
-    }
-  }
+  return guardarDatoPersistenteIntegral(key, data);
 }
+
 
