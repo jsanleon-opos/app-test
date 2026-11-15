@@ -17,6 +17,10 @@ import {
   AuditoriaExamenImportado,
   esArchivoCopiaSeguridadIntegral,
 } from '../utils/jsonExamHelper';
+import {
+  descargarBlobConObjectURL,
+  leerArchivoTextoOGzip,
+} from '../utils/backupCompression';
 import { SelectorLeyesEInformaticaModal } from './SelectorLeyesEInformaticaModal';
 import {
   CATEGORIAS_TEMARIO_PROGRESO,
@@ -219,16 +223,20 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
       return;
     }
 
-    if (esArchivoCopiaSeguridadIntegral(texto) && onRestaurarCopiaSeguridad) {
+    const pareceCopiaSeguridad =
+      esArchivoCopiaSeguridadIntegral(texto) ||
+      texto.slice(0, 600).includes('"copia_seguridad_simulador_c1"');
+
+    if (pareceCopiaSeguridad && onRestaurarCopiaSeguridad) {
       try {
         onRestaurarCopiaSeguridad(texto);
         setJsonText('');
         setMensajeExito(
-          '¡Archivo detectado como Copia de Seguridad Integral! Se han restaurado todos tus exámenes, historial, dudas y enlaces.'
+          '¡Archivo detectado como Copia de Seguridad! Se han importado y guardado en IndexedDB tus exámenes, historial, dudas y enlaces.'
         );
       } catch (err: any) {
         setErrorValidacion(
-          `Error al restaurar la Copia de Seguridad Integral: ${err?.message || 'Formato no válido'}`
+          err?.message || 'Archivo corrupto o incompleto: no se pudo restaurar la copia de seguridad.'
         );
       }
       return;
@@ -602,11 +610,13 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event: any) => {
-      procesarTextoJSON(event.target.result);
-    };
-    reader.readAsText(file);
+    void leerArchivoTextoOGzip(file)
+      .then((texto) => {
+        procesarTextoJSON(texto);
+      })
+      .catch((err: any) => {
+        setErrorValidacion(err?.message || 'Archivo corrupto o incompleto.');
+      });
     e.target.value = '';
   };
 
@@ -617,16 +627,23 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
     if (!file) return;
 
     const lowerName = file.name.toLowerCase();
-    if (!lowerName.endsWith('.json') && !lowerName.endsWith('.txt')) {
-      setErrorValidacion('Por favor, arrastra un archivo con extensión .json o .txt.');
+    if (
+      !lowerName.endsWith('.json') &&
+      !lowerName.endsWith('.json.gz') &&
+      !lowerName.endsWith('.gz') &&
+      !lowerName.endsWith('.txt')
+    ) {
+      setErrorValidacion('Por favor, arrastra un archivo con extensión .json, .json.gz o .txt.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event: any) => {
-      procesarTextoJSON(event.target.result);
-    };
-    reader.readAsText(file);
+    void leerArchivoTextoOGzip(file)
+      .then((texto) => {
+        procesarTextoJSON(texto);
+      })
+      .catch((err: any) => {
+        setErrorValidacion(err?.message || 'Archivo corrupto o incompleto.');
+      });
   };
 
   const cargarExamenPrecargado = (examen: ExamenCompleto) => {
@@ -639,11 +656,9 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
   };
 
   const descargarPlantilla = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(PLANTILLA_JSON_EJEMPLO, null, 2));
-    const a = document.createElement('a');
-    a.href = dataStr;
-    a.download = 'plantilla_examen_oficial.json';
-    a.click();
+    const jsonCompacto = JSON.stringify(PLANTILLA_JSON_EJEMPLO);
+    const blob = new Blob([jsonCompacto], { type: 'application/json;charset=utf-8' });
+    descargarBlobConObjectURL(blob, 'plantilla_examen_oficial.json');
   };
 
   // Unificar exámenes precargados con los guardados/importados (excluyendo los expresamente eliminados por el usuario)
@@ -1000,7 +1015,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
               Método 1: Archivo Local
             </span>
             <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold font-mono">
-              .JSON / .TXT
+              .JSON / .JSON.GZ / .TXT
             </span>
           </div>
 
@@ -1010,10 +1025,10 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
 
           <div className="space-y-1">
             <h3 className="text-sm font-black text-slate-900 dark:text-white">
-              Cargar o arrastrar examen oficial
+              Cargar o arrastrar examen o copia (.json / .json.gz)
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Haz clic para examinar tus carpetas o suelta tu archivo directamente
+              Haz clic para examinar tus carpetas o suelta tu archivo directamente (soporta archivos de +20 MB)
             </p>
           </div>
 
@@ -1031,7 +1046,7 @@ export const OfficialJsonImporter: React.FC<OfficialJsonImporterProps> = ({
           <input
             id="json-file-input"
             type="file"
-            accept=".json,.txt,text/plain"
+            accept=".json,.gz,.json.gz,.txt,application/json,application/gzip,text/plain"
             onChange={handleFileUpload}
             className="hidden"
           />

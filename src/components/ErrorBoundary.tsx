@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { eliminarDeIndexedDB } from '../utils/idbPersistentStore';
 
 interface Props {
   children: ReactNode;
@@ -27,8 +28,10 @@ export class ErrorBoundary extends Component<Props, State> {
     try {
       localStorage.removeItem('c1_active_exam_session');
     } catch (_) {}
-    this.setState({ hasError: false, error: null });
-    window.location.reload();
+    void eliminarDeIndexedDB('c1_active_exam_session').finally(() => {
+      this.setState({ hasError: false, error: null });
+      window.location.reload();
+    });
   };
 
   private handleReintentar = () => {

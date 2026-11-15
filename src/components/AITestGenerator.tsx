@@ -30,6 +30,7 @@ import {
   leerDatoPersistenteSincrono,
   eliminarDeIndexedDB,
 } from '../utils/idbPersistentStore';
+import { leerArchivoTextoOGzip } from '../utils/backupCompression';
 import { generarBancoPreguntasBOE } from '../constants/boeQuestionsBank';
 import { SelectorLeyesEInformaticaModal } from './SelectorLeyesEInformaticaModal';
 import { ConfirmarEvaluacionModal } from './ConfirmarEvaluacionModal';
@@ -170,14 +171,9 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   const [nuevoTituloExamen, setNuevoTituloExamen] = useState('');
   const [mostrarCasoModoLectura, setMostrarCasoModoLectura] = useState(false);
 
-  const [historialPreguntasRecientes, setHistorialPreguntasRecientes] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('c1_historial_preguntas_recientes');
-      return saved ? JSON.parse(saved) : [];
-    } catch (_) {
-      return [];
-    }
-  });
+  const [historialPreguntasRecientes, setHistorialPreguntasRecientes] = useState<string[]>(() =>
+    leerDatoPersistenteSincrono<string[]>('c1_historial_preguntas_recientes', [])
+  );
   const [generationError, setGenerationError] = useState<{
     message: string;
     numPreguntas: number;
@@ -318,9 +314,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
 
   const cargarBateriaOficialGarantizada = (cantidadDeseada?: number) => {
     const cant = cantidadDeseada || numPreguntas || 10;
-    try {
-      localStorage.removeItem('c1_active_exam_session');
-    } catch (_) {}
+    void eliminarDeIndexedDB('c1_active_exam_session');
     if (timerRef.current) clearInterval(timerRef.current);
 
     const tematicasTexto = tematicasSeleccionadas
@@ -337,13 +331,11 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
       historialPreguntasRecientes
     );
 
-    // Actualizar historial anti-duplicados
+    // Actualizar historial anti-duplicados en IndexedDB
     const enunciadosNuevos = data.preguntas.map((p) => p.enunciado);
     const actualizado = Array.from(new Set([...historialPreguntasRecientes, ...enunciadosNuevos])).slice(-100);
     setHistorialPreguntasRecientes(actualizado);
-    try {
-      localStorage.setItem('c1_historial_preguntas_recientes', JSON.stringify(actualizado));
-    } catch (_) {}
+    guardarEnLocalStorageSeguro('c1_historial_preguntas_recientes', actualizado);
 
     const nuevoExamen: ExamenCompleto = {
       id: `BOE-OFC-${Date.now()}`,
@@ -383,9 +375,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   // If external exam passed (e.g. from JSON importer or history)
   useEffect(() => {
     if (examenParaCargar) {
-      try {
-        localStorage.removeItem('c1_active_exam_session');
-      } catch (_) {}
+      void eliminarDeIndexedDB('c1_active_exam_session');
       const normalizado = asegurarSeparacionYNormativaReserva(examenParaCargar);
       setExamenActivo(normalizado);
       setPreguntaActualIdx(0);
@@ -682,10 +672,9 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   const handleImportarJSONDirecto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event: any) => {
-      try {
-        const resultado = parsearTextoOArchivoJSON(event.target.result);
+    void leerArchivoTextoOGzip(file)
+      .then((rawTexto) => {
+        const resultado = parsearTextoOArchivoJSON(rawTexto);
         const ex = Array.isArray(resultado) ? resultado[0] : resultado;
         const examenNormalizado = asegurarSeparacionYNormativaReserva(ex);
         setExamenActivo(examenNormalizado);
@@ -698,20 +687,17 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
         const ordCount = examenNormalizado.preguntas.filter((p) => !p.esReserva).length;
         const resCount = examenNormalizado.preguntas.filter((p) => p.esReserva).length;
         mostrarAviso(`¡Examen "${examenNormalizado.titulo}" (${ordCount} ordinarias + ${resCount} de reserva) importado con éxito!`, 'exito');
-      } catch (err: any) {
-        mostrarAviso('Error al importar archivo JSON/TXT: ' + (err.message || 'Formato no válido'), 'error');
-      }
-    };
-    reader.readAsText(file);
+      })
+      .catch((err: any) => {
+        mostrarAviso('Error al importar archivo: ' + (err?.message || 'Formato no válido'), 'error');
+      });
     e.target.value = '';
   };
 
   // Generate test with Gemini API via backend proxy
   const generarExamenConIA = async () => {
-    // 1. Limpiar cualquier progreso anterior de localStorage para empezar sesión limpia
-    try {
-      localStorage.removeItem('c1_active_exam_session');
-    } catch (_) {}
+    // 1. Limpiar cualquier progreso anterior de IndexedDB para empezar sesión limpia
+    void eliminarDeIndexedDB('c1_active_exam_session');
 
     if (timerRef.current) clearInterval(timerRef.current);
     setExamenActivo(null);
@@ -796,9 +782,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
       const enunciadosNuevos = preguntasProcesadas.map((p: any) => p.enunciado);
       const actualizado = Array.from(new Set([...historialPreguntasRecientes, ...enunciadosNuevos])).slice(-100);
       setHistorialPreguntasRecientes(actualizado);
-      try {
-        localStorage.setItem('c1_historial_preguntas_recientes', JSON.stringify(actualizado));
-      } catch (_) {}
+      guardarEnLocalStorageSeguro('c1_historial_preguntas_recientes', actualizado);
 
       const nuevoExamen: ExamenCompleto = {
         id: `BOE-GEN-${Date.now()}`,
@@ -932,9 +916,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
   };
 
   const reiniciarParaRealizarDeNuevo = () => {
-    try {
-      localStorage.removeItem('c1_active_exam_session');
-    } catch (_) {}
+    void eliminarDeIndexedDB('c1_active_exam_session');
     if (timerRef.current) clearInterval(timerRef.current);
     setRespuestasUsuario({});
     setDudosasUsuario({});
@@ -1199,7 +1181,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                 <input
                   id="direct-import-exam-file"
                   type="file"
-                  accept=".json,.txt,text/plain"
+                  accept=".json,.gz,.json.gz,.txt,application/json,application/gzip,text/plain"
                   onChange={handleImportarJSONDirecto}
                   className="hidden"
                 />
@@ -1742,9 +1724,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
           <button
             onClick={() => {
               setExamenActivo(null);
-              try {
-                localStorage.removeItem('c1_active_exam_session');
-              } catch (_) {}
+              void eliminarDeIndexedDB('c1_active_exam_session');
             }}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
           >
@@ -4057,9 +4037,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                     type="button"
                     onClick={() => {
                       setHistorialPreguntasRecientes([]);
-                      try {
-                        localStorage.removeItem('c1_historial_preguntas_recientes');
-                      } catch (_) {}
+                      void eliminarDeIndexedDB('c1_historial_preguntas_recientes');
                       mostrarAviso('Memoria de exclusión histórica reiniciada.', 'info');
                     }}
                     className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-bold underline cursor-pointer"

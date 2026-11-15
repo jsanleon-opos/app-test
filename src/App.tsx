@@ -17,6 +17,7 @@ import { ProgresoTematicoDiarioWidget } from './components/ProgresoTematicoDiari
 import { SeccionTestPreguntasFalladas } from './components/SeccionTestPreguntasFalladas';
 import { SelectorLeyesEInformaticaModal } from './components/SelectorLeyesEInformaticaModal';
 import { ExportarExamenPdfModal } from './components/ExportarExamenPdfModal';
+import { GestorCopiasSeguridadModal } from './components/GestorCopiasSeguridadModal';
 import {
   CATEGORIAS_TEMARIO_PROGRESO,
   CategoriaTemarioId,
@@ -35,8 +36,8 @@ import {
 import {
   exportarExamenAJSON,
   parsearTextoOArchivoJSON,
-  descargarCopiaSeguridadCompleta,
   restaurarCopiaSeguridadCompleta,
+  ResultadoRestauracionCopia,
   esArchivoCopiaSeguridadIntegral,
   asegurarSeparacionYNormativaReserva,
   CATEGORIAS_EXAMEN_LISTA,
@@ -54,11 +55,13 @@ import {
   calcularResultadoExamenConReservas,
 } from './utils/jsonExamHelper';
 import {
-  hidratarTodoDesdeIndexedDB,
-  escribirEnIndexedDB,
   eliminarDeIndexedDB,
   leerDatoPersistenteSincrono,
+  obtenerEstadoBaseDatosIDB,
+  suscribirEstadoBaseDatosIDB,
+  EstadoBaseDatosIDB,
 } from './utils/idbPersistentStore';
+import { leerArchivoTextoOGzip } from './utils/backupCompression';
 import { EXAMENES_PRECARGADOS_OFICIALES } from './constants/boeData';
 
 export default function App() {
@@ -76,7 +79,7 @@ export default function App() {
     } catch (_) {}
     return 'muy_grande';
   });
-  const [modoRestauracionBackup, setModoRestauracionBackup] = useState<'fusionar' | 'reemplazar'>('fusionar');
+  const [estadoIDB, setEstadoIDB] = useState<EstadoBaseDatosIDB>(() => obtenerEstadoBaseDatosIDB());
 
   const handleCambiarTamanoModoLectura = (nuevoTamano: 'grande' | 'muy_grande' | 'extra') => {
     setTamanoModoLectura(nuevoTamano);
@@ -85,13 +88,42 @@ export default function App() {
     } catch (_) {}
   };
 
-  // BASE DE DATOS 1: Banco de Exámenes (plantillas únicas para realizar, independientes del historial)
-  const [bancoExamenes, setBancoExamenes] = useState<ExamenCompleto[]>([]);
+  const [examenesEliminadosIds, setExamenesEliminadosIds] = useState<string[]>(() =>
+    leerDatoPersistenteSincrono<string[]>('c1_examenes_eliminados', [])
+  );
 
-  // BASE DE DATOS 2: Historial de Pruebas Realizadas (intentos y sesiones completadas con resultado)
-  const [historialPruebas, setHistorialPruebas] = useState<ExamenCompleto[]>([]);
+  // BASE DE DATOS 1: Banco de Exámenes cargado instantáneamente desde IndexedDB al iniciar la app
+  const [bancoExamenes, setBancoExamenes] = useState<ExamenCompleto[]>(() => {
+    const idsElim = new Set(leerDatoPersistenteSincrono<string[]>('c1_examenes_eliminados', []));
+    const guardados = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_banco_examenes', []);
+    const mapa = new Map<string, ExamenCompleto>();
 
-  // BASE DE DATOS 3: Biblioteca — Pestaña 1 (Almacén de dudas) y Pestaña 2 (Base de datos de documentos y enlaces, sin archivos binarios)
+    if (Array.isArray(guardados)) {
+      guardados.forEach((ex) => {
+        if (ex && ex.id && !idsElim.has(ex.id)) {
+          mapa.set(ex.id, asegurarSeparacionYNormativaReserva(ex));
+        }
+      });
+    }
+
+    EXAMENES_PRECARGADOS_OFICIALES.forEach((precargado) => {
+      if (precargado && precargado.id && !idsElim.has(precargado.id) && !mapa.has(precargado.id)) {
+        mapa.set(precargado.id, asegurarSeparacionYNormativaReserva(precargado));
+      }
+    });
+
+    return Array.from(mapa.values());
+  });
+
+  // BASE DE DATOS 2: Historial de Pruebas Realizadas cargado instantáneamente desde IndexedDB
+  const [historialPruebas, setHistorialPruebas] = useState<ExamenCompleto[]>(() => {
+    const guardados = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_historial_pruebas', []);
+    return Array.isArray(guardados)
+      ? guardados.filter(Boolean).map((h) => asegurarSeparacionYNormativaReserva(h))
+      : [];
+  });
+
+  // BASE DE DATOS 3: Biblioteca — Pestaña 1 (Almacén de dudas) y Pestaña 2 (Base de datos de documentos y enlaces)
   const [almacenDudas, setAlmacenDudas] = useState<ItemAlmacenDuda[]>(() =>
     leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', [])
   );
@@ -142,10 +174,6 @@ export default function App() {
     setExamenParaExportarPDF(examen);
   };
 
-  const [examenesEliminadosIds, setExamenesEliminadosIds] = useState<string[]>(() =>
-    leerDatoPersistenteSincrono<string[]>('c1_examenes_eliminados', [])
-  );
-
   // Si se cambia a una pestaña sin visor de preguntas activo, desactivar Modo Lectura automáticamente
   useEffect(() => {
     if (
@@ -158,169 +186,26 @@ export default function App() {
     }
   }, [tabActiva, modoLecturaActivo]);
 
-  // Carga y migración limpia: Banco de Exámenes, Historial y Biblioteca + Hidratación ilimitada desde IndexedDB
+  // Preferencias visuales ligeras en localStorage + suscripción reactiva al estado de IndexedDB
   useEffect(() => {
-    const savedDark = localStorage.getItem('c1_dark_mode') === 'true';
-    setIsDarkMode(savedDark);
-    if (savedDark) document.documentElement.classList.add('dark');
-
-    const idsEliminados: string[] = leerDatoPersistenteSincrono<string[]>('c1_examenes_eliminados', []);
-
-    const savedBanco = localStorage.getItem('c1_banco_examenes');
-    const savedHistorial = localStorage.getItem('c1_historial_pruebas');
-    const legacySaved = localStorage.getItem('c1_examenes_guardados');
-
-    let loadedBanco: ExamenCompleto[] = [];
-    let loadedHistorial: ExamenCompleto[] = [];
-
-    if (savedBanco || savedHistorial) {
-      if (savedBanco) {
-        try {
-          const parsed = JSON.parse(savedBanco);
-          if (Array.isArray(parsed)) {
-            loadedBanco = parsed
-              .filter((e) => !idsEliminados.includes(e.id))
-              .map((e) => asegurarSeparacionYNormativaReserva(e));
-          }
-        } catch (e) {
-          console.error('Error cargando banco de exámenes:', e);
-        }
+    try {
+      const savedDark = localStorage.getItem('c1_dark_mode') === 'true';
+      setIsDarkMode(savedDark);
+      if (savedDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
       }
-      if (savedHistorial) {
-        try {
-          const parsed = JSON.parse(savedHistorial);
-          if (Array.isArray(parsed)) {
-            loadedHistorial = parsed.map((e) => asegurarSeparacionYNormativaReserva(e));
-          }
-        } catch (e) {
-          console.error('Error cargando historial de pruebas:', e);
-        }
-      }
-    } else if (legacySaved) {
-      // Migración automática de versión anterior: separar banco e historial
-      try {
-        const parsed = JSON.parse(legacySaved);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((raw) => {
-            const ex = asegurarSeparacionYNormativaReserva(raw);
-            if (ex.resultado) {
-              loadedHistorial.push(ex);
-            }
-            const baseId = ex.testBaseId || ex.id.replace(/-intento-\d+$/, '');
-            if (!idsEliminados.includes(baseId) && !idsEliminados.includes(ex.id)) {
-              if (!loadedBanco.some((b) => b.id === baseId)) {
-                const tituloBase = ex.titulo.replace(/\s*\(Intento\s*\d+\)/i, '').trim();
-                loadedBanco.push({
-                  ...ex,
-                  id: baseId,
-                  titulo: tituloBase,
-                  resultado: undefined,
-                });
-              }
-            }
-          });
-        }
-      } catch (e) {
-        console.error('Error en migración automática de base de datos:', e);
-      }
-    }
+    } catch (_) {}
 
-    // Asegurar que los exámenes oficiales precargados están en el banco si no han sido eliminados
-    EXAMENES_PRECARGADOS_OFICIALES.forEach((precargado) => {
-      if (!idsEliminados.includes(precargado.id) && !loadedBanco.some((b) => b.id === precargado.id)) {
-        loadedBanco.push(asegurarSeparacionYNormativaReserva(precargado));
-      }
+    // Asegurar que el banco inicial (incluyendo exámenes oficiales precargados) queda registrado en IndexedDB
+    guardarEnLocalStorageSeguro('c1_banco_examenes', bancoExamenes);
+    guardarEnLocalStorageSeguro('c1_historial_pruebas', historialPruebas);
+
+    const cancelarSuscripcion = suscribirEstadoBaseDatosIDB((nuevoEstado) => {
+      setEstadoIDB(nuevoEstado);
     });
-
-    setBancoExamenes(loadedBanco);
-    setHistorialPruebas(loadedHistorial);
-    guardarEnLocalStorageSeguro('c1_banco_examenes', loadedBanco);
-    guardarEnLocalStorageSeguro('c1_historial_pruebas', loadedHistorial);
-
-    // Hidratar de forma asíncrona desde IndexedDB para recuperar colecciones que superen los ~5MB de localStorage
-    void (async () => {
-      const datosIDB = await hidratarTodoDesdeIndexedDB();
-      const idsEliminadosIDB: string[] = Array.isArray(datosIDB['c1_examenes_eliminados'])
-        ? Array.from(new Set([...idsEliminados, ...datosIDB['c1_examenes_eliminados']]))
-        : idsEliminados;
-
-      if (idsEliminadosIDB.length !== idsEliminados.length) {
-        setExamenesEliminadosIds(idsEliminadosIDB);
-      }
-      const setElim = new Set(idsEliminadosIDB);
-
-      if (Array.isArray(datosIDB['c1_banco_examenes'])) {
-        const mapaBanco = new Map<string, ExamenCompleto>();
-        loadedBanco.forEach((ex) => {
-          if (ex && ex.id && !setElim.has(ex.id)) mapaBanco.set(ex.id, ex);
-        });
-        datosIDB['c1_banco_examenes'].forEach((ex: ExamenCompleto) => {
-          if (ex && ex.id && !setElim.has(ex.id)) {
-            mapaBanco.set(ex.id, asegurarSeparacionYNormativaReserva(ex));
-          }
-        });
-        const bancoUnificado = Array.from(mapaBanco.values());
-        setBancoExamenes(bancoUnificado);
-        void escribirEnIndexedDB('c1_banco_examenes', bancoUnificado);
-      } else {
-        void escribirEnIndexedDB('c1_banco_examenes', loadedBanco);
-      }
-
-      if (Array.isArray(datosIDB['c1_historial_pruebas'])) {
-        const mapaHist = new Map<string, ExamenCompleto>();
-        loadedHistorial.forEach((h) => {
-          if (h && h.id) mapaHist.set(h.id, h);
-        });
-        datosIDB['c1_historial_pruebas'].forEach((h: ExamenCompleto) => {
-          if (h && h.id) mapaHist.set(h.id, asegurarSeparacionYNormativaReserva(h));
-        });
-        const histUnificado = Array.from(mapaHist.values());
-        setHistorialPruebas(histUnificado);
-        void escribirEnIndexedDB('c1_historial_pruebas', histUnificado);
-      } else {
-        void escribirEnIndexedDB('c1_historial_pruebas', loadedHistorial);
-      }
-
-      if (Array.isArray(datosIDB['c1_almacen_dudas']) && datosIDB['c1_almacen_dudas'].length > 0) {
-        setAlmacenDudas((prev) => {
-          const mapa = new Map<string, ItemAlmacenDuda>();
-          prev.forEach((d) => {
-            if (d && d.id) mapa.set(d.id, d);
-          });
-          datosIDB['c1_almacen_dudas'].forEach((d: ItemAlmacenDuda) => {
-            if (d && d.id) mapa.set(d.id, d);
-          });
-          const unificadas = Array.from(mapa.values());
-          void escribirEnIndexedDB('c1_almacen_dudas', unificadas);
-          return unificadas;
-        });
-      }
-
-      if (Array.isArray(datosIDB['c1_biblioteca_documentos']) && datosIDB['c1_biblioteca_documentos'].length > 0) {
-        setBibliotecaDocumentos((prev) => {
-          const mapa = new Map<string, DocumentoBibliotecaItem>();
-          prev.forEach((doc) => {
-            if (doc && doc.id) mapa.set(doc.id, doc);
-          });
-          datosIDB['c1_biblioteca_documentos'].forEach((doc: DocumentoBibliotecaItem) => {
-            if (doc && doc.id) mapa.set(doc.id, doc);
-          });
-          const unificados = Array.from(mapa.values());
-          void escribirEnIndexedDB('c1_biblioteca_documentos', unificados);
-          return unificados;
-        });
-      }
-
-      if (Array.isArray(datosIDB['c1_biblioteca_subtemas']) && datosIDB['c1_biblioteca_subtemas'].length > 0) {
-        setSubtemasBiblioteca((prev) => {
-          const unificados = Array.from(new Set([...prev, ...datosIDB['c1_biblioteca_subtemas']]));
-          void escribirEnIndexedDB('c1_biblioteca_subtemas', unificados);
-          return unificados;
-        });
-      }
-
-      setVersionFalladasApp((v) => v + 1);
-    })();
+    return () => cancelarSuscripcion();
   }, []);
 
   const toggleDarkMode = () => {
@@ -482,20 +367,15 @@ export default function App() {
       setBancoExamenes(updatedBanco);
       guardarEnLocalStorageSeguro('c1_banco_examenes', updatedBanco);
 
-      try {
-        localStorage.removeItem(`c1_anotaciones_${idEliminar}`);
-      } catch (_) {}
       void eliminarDeIndexedDB(`c1_anotaciones_${idEliminar}`);
 
-      try {
-        const sesionActiva = localStorage.getItem('c1_active_exam_session');
-        if (sesionActiva) {
-          const ses = JSON.parse(sesionActiva);
-          if (ses?.examenActivo?.id === idEliminar || ses?.examenActivo?.testBaseId === idEliminar) {
-            localStorage.removeItem('c1_active_exam_session');
-          }
-        }
-      } catch (_) {}
+      const sesionActiva = leerDatoPersistenteSincrono<any>('c1_active_exam_session', null);
+      if (
+        sesionActiva?.examenActivo?.id === idEliminar ||
+        sesionActiva?.examenActivo?.testBaseId === idEliminar
+      ) {
+        void eliminarDeIndexedDB('c1_active_exam_session');
+      }
 
       mostrarToast(`Examen eliminado permanentemente del Banco de Exámenes.`, 'exito');
     } else {
@@ -603,9 +483,7 @@ export default function App() {
   };
 
   const handleIniciarNuevoIntento = (item: ExamenCompleto) => {
-    try {
-      localStorage.removeItem('c1_active_exam_session');
-    } catch (_) {}
+    void eliminarDeIndexedDB('c1_active_exam_session');
 
     const baseId = item.testBaseId || item.id;
     // Contar cuántos intentos de este test base existen ya en el historial independiente
@@ -696,11 +574,11 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const aplicarTextoCopiaSeguridad = (
-    textoRaw: string,
-    modo: 'fusionar' | 'reemplazar' = modoRestauracionBackup
+  const aplicarResultadoRestauracion = (
+    res: ResultadoRestauracionCopia,
+    modo: 'fusionar' | 'reemplazar',
+    nombreArchivo?: string
   ) => {
-    const res = restaurarCopiaSeguridadCompleta(textoRaw, { modo });
     setBancoExamenes(res.bancoExamenes);
     setHistorialPruebas(res.historialPruebas);
     if (Array.isArray(res.almacenDudas)) {
@@ -733,35 +611,48 @@ export default function App() {
     setVersionFalladasApp((v) => v + 1);
     guardarEnLocalStorageSeguro('c1_banco_examenes', res.bancoExamenes);
     guardarEnLocalStorageSeguro('c1_historial_pruebas', res.historialPruebas);
+
+    const etiquetaModo = modo === 'fusionar' ? 'fusionada' : 'restaurada';
+    const sufijoArchivo = nombreArchivo ? ` (${nombreArchivo})` : '';
     mostrarToast(
-      `¡Copia integral restaurada (${modo === 'fusionar' ? 'fusionada' : 'exacta'})! ${res.bancoExamenes.length} tests en Banco, ${res.historialPruebas.length} en Historial, ${res.almacenDudas?.length || 0} dudas, ${res.bibliotecaDocumentos?.length || 0} enlaces y ${res.subtemasBiblioteca?.length || 0} subtemas.`,
+      `Copia ${etiquetaModo}${sufijoArchivo} y guardada en IndexedDB: ${res.bancoExamenes.length} exámenes (${res.preguntasBancoTotales.toLocaleString('es-ES')} preg.), ${res.historialPruebas.length} intentos, ${res.almacenDudas?.length || 0} dudas y ${res.bibliotecaDocumentos?.length || 0} enlaces.`,
       'exito'
     );
     setMostrarModalBackup(false);
   };
 
+  const aplicarTextoCopiaSeguridad = (
+    textoRaw: string,
+    modo: 'fusionar' | 'reemplazar' = 'fusionar'
+  ) => {
+    const res = restaurarCopiaSeguridadCompleta(textoRaw, { modo });
+    aplicarResultadoRestauracion(res, modo);
+  };
+
   const handleImportarArchivoHistorial = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event: any) => {
-      try {
-        const rawTexto = String(event.target.result || '');
-        if (esArchivoCopiaSeguridadIntegral(rawTexto)) {
+
+    void leerArchivoTextoOGzip(file)
+      .then((rawTexto) => {
+        const pareceCopiaSeguridad =
+          esArchivoCopiaSeguridadIntegral(rawTexto) ||
+          rawTexto.slice(0, 600).includes('"copia_seguridad_simulador_c1"');
+
+        if (pareceCopiaSeguridad) {
           aplicarTextoCopiaSeguridad(rawTexto, 'fusionar');
           return;
         }
 
         const resultado = parsearTextoOArchivoJSON(rawTexto);
         const lista = Array.isArray(resultado) ? resultado : [resultado];
-        let nuevosBanco = [...bancoExamenes];
-        let nuevosHistorial = [...historialPruebas];
+        const nuevosBanco = [...bancoExamenes];
+        const nuevosHistorial = [...historialPruebas];
         let countBanco = 0;
         let countHistorial = 0;
 
         lista.forEach((exRaw) => {
           const ex = asegurarSeparacionYNormativaReserva(exRaw);
-          // 1. Guardar en Banco de Exámenes como plantilla
           const baseId = ex.testBaseId || ex.id.replace(/-intento-\d+$/, '');
           const existeBanco = nuevosBanco.some((b) => b.id === baseId);
           if (!existeBanco) {
@@ -776,7 +667,6 @@ export default function App() {
             countBanco++;
           }
 
-          // 2. Si ya viene con resultados, añadir a historial de pruebas
           if (ex.resultado) {
             if (!nuevosHistorial.some((h) => h.id === ex.id)) {
               nuevosHistorial.unshift(ex);
@@ -790,7 +680,6 @@ export default function App() {
         guardarEnLocalStorageSeguro('c1_banco_examenes', nuevosBanco);
         guardarEnLocalStorageSeguro('c1_historial_pruebas', nuevosHistorial);
 
-        // Sincronizar también Almacén de Dudas y Base de Datos de Documentos/Enlaces si el JSON los incluía
         try {
           const dudasSync = leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
           if (Array.isArray(dudasSync) && dudasSync.length > 0) {
@@ -801,56 +690,18 @@ export default function App() {
         } catch (_) {}
 
         mostrarToast(
-          `¡Importación completada! ${countBanco} exámenes añadidos al Banco y ${countHistorial} pruebas registradas en el Historial.`,
+          `¡Importación completada en IndexedDB! ${countBanco} exámenes añadidos al Banco y ${countHistorial} pruebas registradas en el Historial.`,
           'exito'
         );
-      } catch (err: any) {
-        mostrarToast('Error al importar archivo JSON/TXT: ' + (err.message || 'Formato no reconocido'), 'error');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const handleRestaurarArchivoBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event: any) => {
-      try {
-        aplicarTextoCopiaSeguridad(String(event.target.result || ''), modoRestauracionBackup);
-      } catch (err: any) {
-        mostrarToast('Error al restaurar copia de seguridad: ' + (err.message || 'Formato no válido'), 'error');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const handleDescargarBackupIntegral = async () => {
-    try {
-      const resultadoExportacion = await descargarCopiaSeguridadCompleta(
-        bancoExamenes,
-        historialPruebas,
-        almacenDudas,
-        bibliotecaDocumentos,
-        subtemasBiblioteca,
-        examenesEliminadosIds
-      );
-      if (resultadoExportacion.ok && resultadoExportacion.resumen) {
-        const r = resultadoExportacion.resumen;
-        const tamanoLegible =
-          r.tamanoBytes >= 1024 * 1024
-            ? `${(r.tamanoBytes / (1024 * 1024)).toFixed(2)} MB`
-            : `${Math.max(1, Math.round(r.tamanoBytes / 1024))} KB`;
+      })
+      .catch((err: any) => {
         mostrarToast(
-          `¡Copia integral exportada al 100% (${tamanoLegible})! Incluye ${r.totalBancoExamenes} tests (${r.totalPreguntasBanco} preg.), ${r.totalHistorialPruebas} intentos, ${r.totalDudasAlmacen} dudas y ${r.totalDocumentosBiblioteca} enlaces.`,
-          'exito'
+          err?.message || 'Archivo corrupto o incompleto: no se pudo importar el archivo.',
+          'error'
         );
-      }
-    } catch (err: any) {
-      mostrarToast('Error al generar la copia de seguridad: ' + (err?.message || 'Error desconocido'), 'error');
-    }
+      });
+
+    e.target.value = '';
   };
 
   const handleCambiarCategoriaExamen = (examenId: string, nuevaCategoria: CategoriaExamen) => {
@@ -1784,32 +1635,53 @@ export default function App() {
                     className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
                   >
                     <i className="fa-solid fa-clock-rotate-left text-[8.5px]"></i>
-                    <span>Actualización v3.7 (Modo Lectura Centrado de Concentración + Copia de Seguridad 100% Íntegra e Ilimitada)</span>
+                    <span>Actualización v3.8 (Persistencia IndexedDB +10.000 Preguntas · Compresión GZIP .json.gz · 3 Modalidades de Copia)</span>
                   </button>
                 </p>
               </div>
             </div>
 
-            {/* Utility Controls (Versión, Copia de Seguridad y Modo Oscuro) */}
-            <div className="flex items-center gap-2">
+            {/* Utility Controls (Indicador Base de Datos Local IndexedDB, Versión, Copia de Seguridad y Modo Oscuro) */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button
+                type="button"
+                onClick={() => setMostrarModalBackup(true)}
+                className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2 text-[11px] font-semibold transition-colors cursor-pointer"
+                title="Estado de la base de datos local IndexedDB (sin límite de 5 MB). Haz clic para gestionar Copias de Seguridad (.json.gz / .json)"
+              >
+                <span
+                  className={`h-2 w-2 rounded-full shrink-0 ${
+                    estadoIDB.guardando ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'
+                  }`}
+                ></span>
+                <span className="hidden md:inline">
+                  {estadoIDB.guardando
+                    ? 'Guardando en IndexedDB...'
+                    : `Guardado localmente: ${bancoExamenes.length.toLocaleString('es-ES')} exámenes · ${totalPreguntasBanco.toLocaleString('es-ES')} preguntas`}
+                </span>
+                <span className="md:hidden font-mono">
+                  {bancoExamenes.length} ex. · {totalPreguntasBanco.toLocaleString('es-ES')} preg.
+                </span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setMostrarModalVersion(true)}
                 className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                title="Notas de la versión 3.7 y últimos cambios implementados"
+                title="Notas de la versión 3.8 y últimos cambios implementados"
               >
                 <i className="fa-solid fa-code-branch text-emerald-600 dark:text-emerald-400 text-[11px]"></i>
-                <span className="hidden sm:inline">Versión 3.7</span>
+                <span className="hidden sm:inline">Versión 3.8</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setMostrarModalBackup(true)}
                 className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                title="Copia de Seguridad Integral (Exportar e Importar 100% de datos)"
+                title="Copias de Seguridad (.json.gz y .json): Completa, Solo Progreso o Por Bloques/Exámenes"
               >
                 <i className="fa-solid fa-shield-halved text-indigo-500 text-[11px]"></i>
-                <span className="hidden sm:inline">Copia de Seguridad</span>
+                <span className="hidden sm:inline">Copias de Seguridad</span>
               </button>
 
               <button
@@ -2165,7 +2037,7 @@ export default function App() {
                   <input
                     id="historial-import-file"
                     type="file"
-                    accept=".json,.txt,text/plain"
+                    accept=".json,.gz,.json.gz,.txt,application/json,application/gzip,text/plain"
                     onChange={handleImportarArchivoHistorial}
                     className="hidden"
                   />
@@ -3222,7 +3094,7 @@ export default function App() {
                     onClick={() => setMostrarModalVersion(true)}
                     className="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 cursor-pointer"
                   >
-                    Versión 3.7.0 · Ver últimos cambios
+                    Versión 3.8.0 · Ver últimos cambios
                   </button>
                   <span className="text-slate-300 dark:text-slate-700">•</span>
                   <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -3230,12 +3102,12 @@ export default function App() {
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Arquitectura con respaldo IndexedDB ilimitado: Banco de Exámenes, Histórico de Pruebas, Almacén de Dudas, Enlaces de Biblioteca y Argumentaciones BOE.
+                  Persistencia automática en IndexedDB (+10.000 preguntas / +300 exámenes sin límite de 5 MB) y copias comprimidas GZIP (.json.gz).
                 </p>
               </div>
               <div className="flex items-center gap-2 text-[10.5px]">
                 <span className="font-mono text-slate-400">
-                  {bancoExamenes.length} en Banco · {historialPruebas.length} en Historial · {almacenDudas.length} Dudas · {bibliotecaDocumentos.length} Enlaces
+                  Guardado localmente: {bancoExamenes.length.toLocaleString('es-ES')} exámenes · {totalPreguntasBanco.toLocaleString('es-ES')} preguntas · {historialPruebas.length} intentos
                 </span>
               </div>
             </div>
@@ -3346,205 +3218,23 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL COPIA DE SEGURIDAD INTEGRAL v3.7 (100% DE DATOS SIN TRUNCADO NI LÍMITE DE CUOTA) */}
-      {mostrarModalBackup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg shadow-2xs ring-2 ring-indigo-500/20 shrink-0">
-                  <i className="fa-solid fa-shield-halved"></i>
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white leading-tight">
-                    Copia de Seguridad e Importación Integral Única (v3.7)
-                  </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    Exporta o restaura al 100% todos los datos de la aplicación sin recortes: Banco de Exámenes, Historial, Dudas, Enlaces de Biblioteca, Subtemas, Argumentaciones BOE, Subrayados y Configuración
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setMostrarModalBackup(false)}
-                className="h-8 w-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-sm cursor-pointer transition-colors"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            {/* Cuadros Métricos Resaltados */}
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-black uppercase text-slate-400 font-mono tracking-wider block">
-                Inventario Completo que se Exporta Íntegramente en el Archivo (.json):
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                <div className="p-2.5 rounded-2xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/80 text-center shadow-xs">
-                  <div className="flex items-center justify-center gap-1 text-[9px] font-black uppercase text-sky-800 dark:text-sky-300 font-mono">
-                    <i className="fa-solid fa-layer-group text-[8.5px] text-sky-600"></i>
-                    <span>Banco Tests</span>
-                  </div>
-                  <span className="text-xl font-black font-mono text-slate-900 dark:text-white mt-0.5 block">
-                    {bancoExamenes.length}
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 dark:text-slate-400 font-medium block">
-                    {totalPreguntasBanco} preguntas
-                  </span>
-                </div>
-
-                <div className="p-2.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/80 text-center shadow-xs">
-                  <div className="flex items-center justify-center gap-1 text-[9px] font-black uppercase text-indigo-800 dark:text-indigo-300 font-mono">
-                    <i className="fa-solid fa-clock-rotate-left text-[8.5px] text-indigo-600"></i>
-                    <span>Historial</span>
-                  </div>
-                  <span className="text-xl font-black font-mono text-indigo-600 dark:text-indigo-400 mt-0.5 block">
-                    {historialPruebas.length}
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 dark:text-slate-400 font-medium block">
-                    intentos y notas
-                  </span>
-                </div>
-
-                <div className="p-2.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/80 text-center shadow-xs">
-                  <div className="flex items-center justify-center gap-1 text-[9px] font-black uppercase text-amber-800 dark:text-amber-300 font-mono">
-                    <i className="fa-solid fa-lightbulb text-[8.5px] text-amber-600"></i>
-                    <span>Dudas / Notas</span>
-                  </div>
-                  <span className="text-xl font-black font-mono text-amber-600 dark:text-amber-400 mt-0.5 block">
-                    {almacenDudas.length}
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 dark:text-slate-400 font-medium block">
-                    almacén repaso
-                  </span>
-                </div>
-
-                <div className="p-2.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 text-center shadow-xs">
-                  <div className="flex items-center justify-center gap-1 text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 font-mono">
-                    <i className="fa-solid fa-link text-[8.5px] text-emerald-600"></i>
-                    <span>Enlaces / Docs</span>
-                  </div>
-                  <span className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block">
-                    {bibliotecaDocumentos.length}
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 dark:text-slate-400 font-medium block">
-                    {subtemasBiblioteca.length} subtemas
-                  </span>
-                </div>
-
-                <div className="col-span-2 sm:col-span-1 p-2.5 rounded-2xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/80 text-center shadow-xs">
-                  <div className="flex items-center justify-center gap-1 text-[9px] font-black uppercase text-rose-800 dark:text-rose-300 font-mono">
-                    <i className="fa-solid fa-rotate text-[8.5px] text-rose-600"></i>
-                    <span>Falladas / Extra</span>
-                  </div>
-                  <span className="text-xl font-black font-mono text-rose-600 dark:text-rose-400 mt-0.5 block">
-                    {totalPreguntasFalladasConsolidado}
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 dark:text-slate-400 font-medium block">
-                    + subrayados/BOE
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Action 1: Export Complete Backup */}
-            <div className="p-4 rounded-2xl border border-indigo-200 dark:border-indigo-800/80 bg-linear-to-br from-indigo-50/60 via-white to-white dark:from-indigo-950/30 dark:via-slate-800 dark:to-slate-800 space-y-2.5 shadow-xs">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 text-indigo-900 dark:text-indigo-200 font-bold text-xs">
-                  <span className="h-6 w-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[11px] shrink-0">
-                    <i className="fa-solid fa-download"></i>
-                  </span>
-                  <span>1. Exportar Copia de Seguridad 100% Completa (Sin Truncado)</span>
-                </div>
-                <span className="text-[10px] font-mono text-indigo-700 dark:text-indigo-300 font-bold">
-                  Esquema v3.7 · Respaldo íntegro
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                Consolida memoria viva + base de datos IndexedDB ilimitada para exportar el <strong>100% de tus datos</strong> en un único fichero <strong>.json</strong>: todos los tests importados y oficiales editados del <strong>Banco de Exámenes</strong>, todo el <strong>Historial de Pruebas y Simulacros</strong> (con notas exactas, respuestas e intentos), todas las <strong>Dudas, Plazos, Mnemotecnia e Informática</strong>, todos los <strong>Enlaces Web y Rutas Locales de la Biblioteca</strong>, <strong>Subtemas</strong>, <strong>Recursos de Argumentación BOE</strong>, <strong>Subrayados</strong>, <strong>Control de Falladas/Superadas</strong>, <strong>Registro de Cuadernillos PDF</strong> y <strong>Configuración</strong>.
-              </p>
-              <button
-                type="button"
-                onClick={handleDescargarBackupIntegral}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <i className="fa-solid fa-floppy-disk"></i>
-                <span>Descargar Copia de Seguridad Completa (.json)</span>
-              </button>
-            </div>
-
-            {/* Action 2: Restore Backup */}
-            <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-linear-to-br from-slate-50 via-white to-white dark:from-slate-800 dark:via-slate-850 dark:to-slate-850 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-bold text-xs">
-                  <span className="h-6 w-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[11px] shrink-0">
-                    <i className="fa-solid fa-upload"></i>
-                  </span>
-                  <span>2. Importar y Restaurar Copia de Seguridad Completa</span>
-                </div>
-
-                {/* Selector de Modo de Restauración */}
-                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-900 border border-slate-300 dark:border-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => setModoRestauracionBackup('fusionar')}
-                    className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-colors cursor-pointer ${
-                      modoRestauracionBackup === 'fusionar'
-                        ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-2xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                    title="Conserva tus datos actuales y suma/actualiza todo lo contenido en el archivo"
-                  >
-                    Fusionar (Recomendado)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModoRestauracionBackup('reemplazar')}
-                    className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-colors cursor-pointer ${
-                      modoRestauracionBackup === 'reemplazar'
-                        ? 'bg-white dark:bg-slate-700 text-amber-700 dark:text-amber-300 shadow-2xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                    title="Deja la aplicación exactamente con los datos contenidos en la copia importada"
-                  >
-                    Reemplazar Exacto
-                  </button>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                {modoRestauracionBackup === 'fusionar'
-                  ? 'Modo Fusionar: une la copia con tus datos actuales sin perder ningún test, intento, duda ni enlace previo.'
-                  : 'Modo Reemplazar Exacto: restaura el estado exacto del archivo de copia de seguridad en todas las secciones.'}
-              </p>
-              <input
-                id="restore-backup-file-input"
-                type="file"
-                accept=".json,.txt,text/plain"
-                onChange={handleRestaurarArchivoBackup}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => document.getElementById('restore-backup-file-input')?.click()}
-                className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <i className="fa-solid fa-folder-open text-emerald-500"></i>
-                <span>Seleccionar Archivo de Copia de Seguridad (.json)</span>
-              </button>
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={() => setMostrarModalBackup(false)}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL GESTOR DE COPIAS DE SEGURIDAD v3.8 (INDEXEDDB + GZIP .JSON.GZ + 3 MODALIDADES + IMPORTACIÓN +20 MB) */}
+      <GestorCopiasSeguridadModal
+        isOpen={mostrarModalBackup}
+        onClose={() => setMostrarModalBackup(false)}
+        estadoIDB={estadoIDB}
+        bancoExamenes={bancoExamenes}
+        historialPruebas={historialPruebas}
+        almacenDudas={almacenDudas}
+        bibliotecaDocumentos={bibliotecaDocumentos}
+        subtemasBiblioteca={subtemasBiblioteca}
+        examenesEliminadosIds={examenesEliminadosIds}
+        totalPreguntasFalladas={totalPreguntasFalladasConsolidado}
+        onCopiaRestaurada={(res, modoAplicado, nombreArchivo) =>
+          aplicarResultadoRestauracion(res, modoAplicado, nombreArchivo)
+        }
+        onNotificar={mostrarToast}
+      />
 
       {/* MODAL: PREGUNTAR AL RECUPERAR TEST SI REVISAR O REPETIR DE NUEVO */}
       {examenRecuperarPregunta && (
@@ -3680,22 +3370,22 @@ export default function App() {
         onClose={() => setExamenParaExportarPDF(null)}
       />
 
-      {/* MODAL DE VERSIÓN 3.7 Y ÚLTIMOS CAMBIOS */}
+      {/* MODAL DE VERSIÓN 3.8 Y ÚLTIMOS CAMBIOS */}
       {mostrarModalVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border-2 border-slate-300 dark:border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-850 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-slate-300 dark:border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3.5">
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-2xl bg-linear-to-br from-indigo-600 to-emerald-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0">
-                  <i className="fa-solid fa-code-branch"></i>
+                <div className="h-11 w-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0">
+                  <i className="fa-solid fa-database"></i>
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      Notas de Versión v3.7.0
+                      Notas de Versión v3.8.0
                     </h3>
                     <span className="text-[10px] font-mono font-black uppercase text-emerald-700 dark:text-emerald-300">
-                      · Modo Lectura Centrado + Copia de Seguridad 100% Íntegra
+                      · Arquitectura IndexedDB + GZIP (.json.gz) + 3 Modalidades de Copia
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -3713,51 +3403,42 @@ export default function App() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-emerald-50/95 dark:bg-emerald-950/45 border-2 border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/95 dark:bg-emerald-950/45 border border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
                 <div className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
-                  <i className="fa-solid fa-book-open-reader text-emerald-600"></i>
-                  <span>Novedad v3.7.0 · Modo Lectura de Concentración y Copia de Seguridad 100% Íntegra</span>
+                  <i className="fa-solid fa-database text-emerald-600"></i>
+                  <span>Novedad v3.8.0 · Persistencia Nativa IndexedDB (+10.000 Preguntas) y Compresión GZIP</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • <strong>Nuevo «Modo Lectura» en todos los visores de preguntas</strong> (<em>Generador/Banco, Test de Falladas y Simulacro Oficial</em>, atajo <kbd className="px-1 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 font-mono text-[10px]">Alt+L</kbd>): oculta cabeceras de pestañas, widgets periféricos, matrices laterales y controles secundarios, presentando el <strong>enunciado y las opciones A–D centrados y con fuente ampliada ajustable</strong> (<em>A Grande · A+ Muy Grande · A++ Extra</em>) para máxima concentración.<br />
-                  • <strong>Auditoría y blindaje completo de la Copia de Seguridad (v3.7 + IndexedDB ilimitado)</strong>: eliminado el recorte por límite de 5 MB de <code>localStorage</code> y la revocación prematura de descargas grandes; ahora exporta y restaura el <strong>100% de los datos sin pérdidas</strong> (Banco de Exámenes + Oficiales editados, Historial con notas exactas e intentos, Almacén de Dudas/Notas, Enlaces y Documentos de Biblioteca, Subtemas, Argumentaciones BOE, Subrayados, Control de Falladas, Tests PDF descargados y Configuración).
+                  • <strong>Almacenamiento persistente 100% en IndexedDB</strong>: adiós al límite de 5 MB de <code>localStorage</code>. Soporta más de 10.000 preguntas, 300 exámenes y colecciones de +20 MB con carga instantánea al abrir la app y guardado automático en segundo plano.<br />
+                  • <strong>Exportación por Blob + Compresión nativa GZIP (<code>.json.gz</code>)</strong>: eliminado cualquier uso de <code>data:text/json</code>; serialización compacta con ahorro del 80-85% y validación interna previa frente a IndexedDB.<br />
+                  • <strong>Tres modalidades de exportación e importación inteligente</strong>: <em>Copia Completa</em>, <em>Solo Progreso e Historial</em> (ultraligero) y <em>Por Bloques o Exámenes seleccionados</em>, con soporte de importación <code>.json</code> y <code>.json.gz</code> en modos <em>Fusionar</em> o <em>Restaurar</em>.
                 </p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-sky-50/95 dark:bg-sky-950/40 border border-sky-300 dark:border-sky-800/80 space-y-1.5">
                 <div className="font-black text-sky-900 dark:text-sky-200 flex items-center gap-2">
-                  <i className="fa-solid fa-file-pdf text-sky-600"></i>
-                  <span>Versión 3.6 · Cabecera Unificada en 1 Cuadro, Progreso Diario Cerrado y Vista Previa PDF</span>
+                  <i className="fa-solid fa-book-open-reader text-sky-600"></i>
+                  <span>Versión 3.7 · Modo Lectura Centrado de Concentración</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • Cabecera de ejecución compactada en un único cuadro con preguntas ordinarias y de reserva en línea, Progreso Temático Diario cerrado por defecto y visor A4 interactivo de previsualización en vivo del Cuadernillo PDF y Hoja OMR.
+                  • Modo Lectura en todos los visores de preguntas (atajo Alt+L) que oculta elementos laterales y presenta enunciado y opciones centrados con fuente ampliada ajustable.
                 </p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-indigo-50/90 dark:bg-indigo-950/40 border border-indigo-300 dark:border-indigo-800/80 space-y-1.5">
                 <div className="font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
-                  <i className="fa-solid fa-landmark-flag text-indigo-600"></i>
-                  <span>Versiones 3.4–3.5 · Simulacro Oficial en 2 Pestañas y Exportación PDF CPS/INAP</span>
+                  <i className="fa-solid fa-file-pdf text-indigo-600"></i>
+                  <span>Versiones 3.4–3.6 · Simulacro Oficial en 2 Pestañas y Previsualización PDF CPS/INAP</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • División de Simulacro Oficial en 2 pestañas, apertura sin descarga automática, Hoja OMR verde en blanco, Portada Oficial del Tribunal, Anexo BOE y Pack Modelo A + Modelo B.
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-teal-50/80 dark:bg-teal-950/35 border border-teal-300 dark:border-teal-800/80 space-y-1.5">
-                <div className="font-black text-teal-900 dark:text-teal-200 flex items-center gap-2">
-                  <i className="fa-solid fa-scale-balanced text-teal-600"></i>
-                  <span>Versiones 3.0–3.3 · Marcado Limpio, RD 366/2007, IV Convenio, RD 951/2005 y Biblioteca</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • Altura fija en preguntas, visado verde (✓) y aspa roja (✗), nombres multilínea, editor de respuestas correctas con recálculo retroactivo y Biblioteca en dos pestañas.
+                  • Cabecera unificada en 1 cuadro, Progreso Diario cerrado por defecto, visor A4 interactivo de previsualización PDF y generación de cuadernillo oficial con Hoja OMR en blanco.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[11px] font-mono text-slate-400">
-                Versión 3.7.0 · Simulador C1 AGE & Comunidad de Madrid
+                Versión 3.8.0 · Simulador C1 AGE & Comunidad de Madrid
               </span>
               <button
                 type="button"

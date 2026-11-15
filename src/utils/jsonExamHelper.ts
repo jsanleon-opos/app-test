@@ -29,7 +29,17 @@ import {
   guardarDatoPersistenteIntegral,
   leerDatoPersistenteSincrono,
   recopilarTodasLasAnotacionesPersistidas,
+  escribirMultiplesEnIndexedDB,
+  esperarEscriturasPendientesIDB,
+  limpiarTodasLasAnotacionesDeIndexedDB,
+  obtenerInventarioVerificadoIndexedDB,
 } from './idbPersistentStore';
+import {
+  comprimirTextoAGzipBlob,
+  descargarBlobConObjectURL,
+  limpiarPropiedadesRedundantes,
+  soportaCompresionGzipNativa,
+} from './backupCompression';
 
 const STORAGE_KEY_RECURSOS_ARGUMENTACION = 'c1_recursos_argumentacion_preguntas';
 const STORAGE_KEY_BIBLIOTECA_DOCUMENTOS = 'c1_biblioteca_documentos';
@@ -3199,67 +3209,18 @@ export async function guardarArchivoConSelectorCarpeta(
   dataString: string,
   nombreSugerido: string,
   mimeType: string = 'application/json',
-  extension: string = '.json'
+  _extension: string = '.json'
 ): Promise<boolean> {
-  const blob = new Blob([dataString], { type: `${mimeType};charset=utf-8` });
-
-  // 1. Selector nativo con elección de carpeta y nombre (solo en ventana principal no embebida en iframe cruzado)
-  const estaEnVentanaTop =
-    typeof window !== 'undefined' &&
-    (() => {
-      try {
-        return window.self === window.top;
-      } catch {
-        return false;
-      }
-    })();
-
-  if (estaEnVentanaTop && typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
-    try {
-      const pickerOpts = {
-        suggestedName: nombreSugerido,
-        types: [
-          {
-            description: 'Archivo JSON de Examen / Copia de Seguridad Integral',
-            accept: {
-              [mimeType]: [extension],
-            },
-          },
-        ],
-      };
-      const handle = await (window as any).showSaveFilePicker(pickerOpts);
-      const writable = await handle.createWritable({ keepExistingData: false });
-      await writable.write(blob);
-      await writable.close();
-      return true;
-    } catch (err: any) {
-      // Si el usuario cancela explícitamente la ventana de selección de carpeta, no forzar descarga
-      if (err && (err.name === 'AbortError' || err.code === 20)) {
-        return false;
-      }
-      console.warn('showSaveFilePicker no completado, ejecutando descarga directa íntegra:', err);
-    }
+  // Validar integridad sintáctica antes de disparar cualquier descarga JSON
+  if (mimeType.includes('json')) {
+    JSON.parse(dataString);
   }
-
-  // 2. Descarga estándar íntegra mediante Blob (con liberación diferida de 60s para garantizar escritura completa de archivos grandes)
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = nombreSugerido;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => {
-    try {
-      URL.revokeObjectURL(url);
-    } catch (_) {}
-  }, 60_000);
-  return true;
+  const blob = new Blob([dataString], { type: `${mimeType};charset=utf-8` });
+  return descargarBlobConObjectURL(blob, nombreSugerido);
 }
 
 /**
- * Exporta un examen a un archivo .json permitiendo elegir la carpeta de destino,
+ * Exporta un examen individual a un archivo .json compacto mediante Blob + URL.createObjectURL,
  * incluyendo los enlaces web y ficheros locales de argumentación de cada pregunta
  * así como los datos de la sección Almacén de Dudas.
  */
@@ -3267,13 +3228,10 @@ export async function exportarExamenAJSON(
   examen: ExamenCompleto,
   almacenDudasOpcional?: ItemAlmacenDuda[]
 ): Promise<boolean> {
-  let almacenDudas: ItemAlmacenDuda[] = almacenDudasOpcional || [];
-  if (!almacenDudasOpcional || almacenDudasOpcional.length === 0) {
-    try {
-      const rawDudas = localStorage.getItem('c1_almacen_dudas');
-      if (rawDudas) almacenDudas = JSON.parse(rawDudas);
-    } catch (_) {}
-  }
+  const almacenDudas: ItemAlmacenDuda[] =
+    almacenDudasOpcional && almacenDudasOpcional.length > 0
+      ? almacenDudasOpcional
+      : leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
 
   const almacenDudasEnriquecido = almacenDudas.map((it) => {
     const rec = obtenerRecursosArgumentacionDePregunta(it);
@@ -3329,7 +3287,8 @@ export async function exportarExamenAJSON(
     recursosArgumentacionPorPregunta: leerMapaRecursosArgumentacionGlobal(),
   };
 
-  const dataString = JSON.stringify(payloadExportacion, null, 2);
+  const payloadCompacto = limpiarPropiedadesRedundantes(payloadExportacion);
+  const dataString = JSON.stringify(payloadCompacto);
   const safeTitle = (examen.titulo || 'Examen')
     .replace(/[^a-zA-Z0-9_\u00C0-\u017F]/g, '_')
     .substring(0, 35);
@@ -3339,8 +3298,7 @@ export async function exportarExamenAJSON(
 }
 
 /**
- * Exporta la biblioteca completa de exámenes guardados junto con los enlaces/ficheros de argumentación
- * y los datos de la sección Biblioteca (Dudas + Documentos/Enlaces sin archivos binarios) permitiendo elegir la carpeta de destino
+ * Exporta una colección de exámenes a .json compacto mediante Blob + ObjectURL.
  */
 export async function exportarBibliotecaAJSON(
   examenes: ExamenCompleto[],
@@ -3351,13 +3309,10 @@ export async function exportarBibliotecaAJSON(
     return false;
   }
 
-  let almacenDudas: ItemAlmacenDuda[] = almacenDudasOpcional || [];
-  if (!almacenDudasOpcional || almacenDudasOpcional.length === 0) {
-    try {
-      const rawDudas = localStorage.getItem('c1_almacen_dudas');
-      if (rawDudas) almacenDudas = JSON.parse(rawDudas);
-    } catch (_) {}
-  }
+  const almacenDudas: ItemAlmacenDuda[] =
+    almacenDudasOpcional && almacenDudasOpcional.length > 0
+      ? almacenDudasOpcional
+      : leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
 
   const examenesEnriquecidos = examenes.map((ex, idx) => ({
     ...ex,
@@ -3375,12 +3330,18 @@ export async function exportarBibliotecaAJSON(
       : {}),
   }));
 
-  const dataString = JSON.stringify(examenesEnriquecidos, null, 2);
+  const dataString = JSON.stringify(limpiarPropiedadesRedundantes(examenesEnriquecidos));
   const nombreSugerido = `Biblioteca_Examenes_C1_${new Date().toISOString().split('T')[0]}.json`;
   return await guardarArchivoConSelectorCarpeta(dataString, nombreSugerido, 'application/json', '.json');
 }
 
+export type ModalidadExportacionCopia = 'completa' | 'solo_progreso' | 'seleccion_examenes';
+export type FormatoExportacionCopia = 'json_gz' | 'json';
+
 export interface ResumenCopiaSeguridadExportada {
+  modalidad: ModalidadExportacionCopia;
+  formato: FormatoExportacionCopia;
+  verificadoContraIDB: boolean;
   totalBancoExamenes: number;
   totalPreguntasBanco: number;
   totalHistorialPruebas: number;
@@ -3390,15 +3351,19 @@ export interface ResumenCopiaSeguridadExportada {
   totalRecursosArgumentacion: number;
   totalAnotaciones: number;
   totalPreguntasControlFalladas: number;
+  tamanoSinComprimirBytes: number;
   tamanoBytes: number;
+  porcentajeReduccion: number;
   nombreArchivo: string;
 }
 
 export interface CopiaSeguridadIntegral {
   tipo: 'copia_seguridad_simulador_c1';
-  version: '3.7' | '3.2' | '2.6' | '2.5';
+  version: '3.8' | '3.7' | '3.2' | '2.6' | '2.5';
+  modalidadExportacion?: ModalidadExportacionCopia;
   fecha: string;
   metadata: {
+    modalidad?: ModalidadExportacionCopia;
     totalBancoExamenes: number;
     totalPreguntasBanco?: number;
     totalHistorialPruebas: number;
@@ -3440,7 +3405,7 @@ export interface CopiaSeguridadIntegral {
 
 /**
  * Detecta si un texto JSON corresponde a un fichero de Copia de Seguridad Integral
- * (para poder restaurarlo automáticamente incluso si se sube desde Banco o Historial).
+ * (completa, solo progreso o parcial por bloques/exámenes).
  */
 export function esArchivoCopiaSeguridadIntegral(rawText: string): boolean {
   if (!rawText || rawText.length < 20) return false;
@@ -3458,51 +3423,50 @@ export function esArchivoCopiaSeguridadIntegral(rawText: string): boolean {
   }
 }
 
-const CLAVES_TOP_LEVEL_GESTIONADAS = new Set<string>([
-  'c1_banco_examenes',
-  'c1_historial_pruebas',
-  'c1_examenes_guardados',
-  'c1_almacen_dudas',
-  'c1_biblioteca_documentos',
-  'c1_biblioteca_subtemas',
-  'c1_recursos_argumentacion_preguntas',
-  'c1_preguntas_superadas_v1',
-  'c1_examenes_eliminados',
-  'c1_historial_preguntas_recientes',
-  'c1_tests_descargados_pdf',
-  'c1_active_exam_session',
-  'c1_dark_mode',
-  'c1_auto_avance_al_final',
-  'c1_corte_propio_test',
-  'c1_corte_propio_supuesto',
-  'c1_usar_corte_propio',
-  'c1_custom_gemini_api_key',
-  'gemini_custom_api_key',
-  'c1_selected_gemini_model',
-  'c1_modo_lectura_tamano',
-]);
+export interface OpcionesExportacionCopiaAvanzada {
+  modalidad: ModalidadExportacionCopia;
+  formato: FormatoExportacionCopia;
+  bancoExamenes: ExamenCompleto[];
+  historialPruebas?: ExamenCompleto[];
+  almacenDudas?: ItemAlmacenDuda[];
+  bibliotecaDocumentos?: DocumentoBibliotecaItem[];
+  subtemasBiblioteca?: string[];
+  examenesEliminadosIds?: string[];
+  idsExamenesSeleccionados?: string[];
+  etiquetaBloqueOSeleccion?: string;
+}
 
 /**
- * Genera y guarda un archivo JSON con la Copia de Seguridad Integral Única (v3.7)
- * consolidando TODOS los datos tanto del estado en memoria como del almacenamiento persistente:
- * - Banco de Exámenes completo (plantillas importadas, creadas y oficiales personalizadas)
- * - Historial de Pruebas completo (todos los intentos, simulacros y tests de falladas con notas y respuestas)
- * - Biblioteca completa:
- *   · Almacén de Dudas, Artículos Clave, Plazos, Mnemotecnia y Fichas de Informática
- *   · Base de Datos de Documentos y Enlaces (webs externas y rutas locales, sin binarios)
- *   · Subtemas personalizados y predefinidos
- * - Recursos de Argumentación por pregunta (enlaces y documentos en justificaciones)
- * - Anotaciones y subrayados por examen
- * - Registro de preguntas superadas/falladas, exámenes eliminados, tests descargados en PDF, sesión activa y configuración
+ * Motor unificado de Exportación de Copias de Seguridad v3.8:
+ * - 3 Modalidades:
+ *   1. 'completa' (.json.gz y .json): Banco completo + Historial + Anotaciones + Dudas + Biblioteca + Configuración.
+ *   2. 'solo_progreso' (.json ultraligero y .json.gz): Excluye el banco de preguntas y guarda únicamente
+ *      historialPruebas, estadísticas/controlPreguntasSuperadas, fallos, dudas, anotaciones, biblioteca y configuración.
+ *   3. 'seleccion_examenes' (.json y .json.gz): Exporta exclusivamente los bloques o exámenes marcados por el usuario.
+ * - Serialización compacta (JSON.stringify sin espacios) y limpieza de propiedades vacías/redundantes.
+ * - Validación interna previa a la descarga: JSON.parse íntegro + verificación 100% contra IndexedDB.
+ * - Descarga mediante Blob + URL.createObjectURL(blob) con liberación en 1000ms (0% data:text/json).
  */
-export async function descargarCopiaSeguridadCompleta(
-  bancoOExamenes: ExamenCompleto[],
-  historialOpcional?: ExamenCompleto[],
-  almacenDudasOpcional?: ItemAlmacenDuda[],
-  bibliotecaDocumentosOpcional?: DocumentoBibliotecaItem[],
-  subtemasBibliotecaOpcional?: string[],
-  examenesEliminadosOpcional?: string[]
-): Promise<{ ok: boolean; resumen?: ResumenCopiaSeguridadExportada }> {
+export async function exportarCopiaSeguridadAvanzada(
+  opciones: OpcionesExportacionCopiaAvanzada
+): Promise<{ ok: boolean; resumen: ResumenCopiaSeguridadExportada }> {
+  const {
+    modalidad,
+    formato,
+    bancoExamenes: bancoOExamenes,
+    historialPruebas: historialOpcional,
+    almacenDudas: almacenDudasOpcional,
+    bibliotecaDocumentos: bibliotecaDocumentosOpcional,
+    subtemasBiblioteca: subtemasBibliotecaOpcional,
+    examenesEliminadosIds: examenesEliminadosOpcional,
+    idsExamenesSeleccionados,
+    etiquetaBloqueOSeleccion,
+  } = opciones;
+
+  if (formato === 'json_gz' && !soportaCompresionGzipNativa()) {
+    throw new Error('Este navegador no soporta CompressionStream("gzip"). Descarga la copia en formato .json estándar.');
+  }
+
   // 1. Consolidar IDs de exámenes eliminados
   const eliminadosPersistidos = leerDatoPersistenteSincrono<string[]>('c1_examenes_eliminados', []);
   const examenesEliminadosIds = Array.from(
@@ -3513,7 +3477,7 @@ export async function descargarCopiaSeguridadCompleta(
   );
   const setEliminados = new Set(examenesEliminadosIds);
 
-  // 2. Consolidar mapa global de recursos de argumentación + cosechar cualquier recurso embebido
+  // 2. Consolidar mapa global de recursos de argumentación
   const mapaRecursosGlobal: Record<string, RecursoArgumentacionPregunta[]> = {
     ...leerMapaRecursosArgumentacionGlobal(),
   };
@@ -3539,7 +3503,7 @@ export async function descargarCopiaSeguridadCompleta(
   };
 
   // 3. Consolidar todas las anotaciones y subrayados por examen
-  const anotacionesPorExamen: Record<string, any[]> = {
+  const anotacionesTodas: Record<string, any[]> = {
     ...recopilarTodasLasAnotacionesPersistidas(),
   };
 
@@ -3549,19 +3513,22 @@ export async function descargarCopiaSeguridadCompleta(
         registrarRecursosDeItem(p.enunciado, p.recursosArgumentacion);
       }
       const clave = normalizarClaveRecursoPregunta(p.enunciado);
-      const rec = clave && Array.isArray(mapaRecursosGlobal[clave]) ? mapaRecursosGlobal[clave] : p.recursosArgumentacion;
+      const rec =
+        clave && Array.isArray(mapaRecursosGlobal[clave])
+          ? mapaRecursosGlobal[clave]
+          : p.recursosArgumentacion;
       return rec && rec.length > 0 ? { ...p, recursosArgumentacion: rec } : p;
     });
 
     const notasExamen =
       Array.isArray(ex.anotaciones) && ex.anotaciones.length > 0
         ? ex.anotaciones
-        : Array.isArray(anotacionesPorExamen[ex.id])
-        ? anotacionesPorExamen[ex.id]
+        : Array.isArray(anotacionesTodas[ex.id])
+        ? anotacionesTodas[ex.id]
         : undefined;
 
-    if (notasExamen && notasExamen.length > 0 && !anotacionesPorExamen[ex.id]) {
-      anotacionesPorExamen[ex.id] = notasExamen;
+    if (notasExamen && notasExamen.length > 0 && !anotacionesTodas[ex.id]) {
+      anotacionesTodas[ex.id] = notasExamen;
     }
 
     return {
@@ -3571,11 +3538,11 @@ export async function descargarCopiaSeguridadCompleta(
     };
   };
 
-  // 4. Consolidar Banco de Exámenes (precargados no eliminados + almacenamiento + estado vivo en React)
+  // 4. Consolidar Banco de Exámenes íntegro
   const mapaBanco = new Map<string, ExamenCompleto>();
   EXAMENES_PRECARGADOS_OFICIALES.forEach((prec) => {
     if (prec && prec.id && !setEliminados.has(prec.id)) {
-      mapaBanco.set(prec.id, prec);
+      mapaBanco.set(prec.id, asegurarSeparacionYNormativaReserva(prec));
     }
   });
 
@@ -3599,16 +3566,14 @@ export async function descargarCopiaSeguridadCompleta(
     }
   });
 
-  const bancoExamenes = Array.from(mapaBanco.values()).map(enriquecerExamenCompleto);
+  const bancoConsolidadoCompleto = Array.from(mapaBanco.values()).map(enriquecerExamenCompleto);
 
-  // 5. Consolidar Historial de Pruebas Realizadas (almacenamiento + estado vivo en React)
+  // 5. Consolidar Historial de Pruebas Realizadas íntegro
   const mapaHistorial = new Map<string, ExamenCompleto>();
   const historialPersistido = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_historial_pruebas', []);
   if (Array.isArray(historialPersistido)) {
     historialPersistido.forEach((h) => {
-      if (h && h.id) {
-        mapaHistorial.set(h.id, h);
-      }
+      if (h && h.id) mapaHistorial.set(h.id, h);
     });
   }
 
@@ -3618,49 +3583,42 @@ export async function descargarCopiaSeguridadCompleta(
       : (bancoOExamenes || []).filter((e) => !!e.resultado);
 
   (historialEntrada || []).forEach((h) => {
-    if (h && h.id) {
-      mapaHistorial.set(h.id, h);
-    }
+    if (h && h.id) mapaHistorial.set(h.id, h);
   });
 
-  const historialPruebas = Array.from(mapaHistorial.values()).map(enriquecerExamenCompleto);
+  const historialConsolidadoCompleto = Array.from(mapaHistorial.values()).map(enriquecerExamenCompleto);
 
-  // 6. Consolidar Almacén de Dudas, Notas, Plazos, Mnemotecnia e Informática
+  // 6. Consolidar Almacén de Dudas y Biblioteca
   const dudasBase =
     almacenDudasOpcional !== undefined
       ? almacenDudasOpcional
       : leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
 
   const mapaDudas = new Map<string, ItemAlmacenDuda>();
-  if (almacenDudasOpcional === undefined) {
-    (dudasBase || []).forEach((it) => {
-      if (it && it.id) mapaDudas.set(it.id, it);
-    });
-  } else {
-    // Si el estado vivo tiene elementos los priorizamos, y si el almacenamiento persistente tenía elementos adicionales por escritura directa los sumamos si no hay colisión
-    (dudasBase || []).forEach((it) => {
-      if (it && it.id) mapaDudas.set(it.id, it);
-    });
-    if (mapaDudas.size === 0) {
-      const dudasPersistidas = leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
-      if (Array.isArray(dudasPersistidas)) {
-        dudasPersistidas.forEach((it) => {
-          if (it && it.id) mapaDudas.set(it.id, it);
-        });
-      }
+  (dudasBase || []).forEach((it) => {
+    if (it && it.id) mapaDudas.set(it.id, it);
+  });
+  if (mapaDudas.size === 0 && almacenDudasOpcional !== undefined) {
+    const dudasPersistidas = leerDatoPersistenteSincrono<ItemAlmacenDuda[]>('c1_almacen_dudas', []);
+    if (Array.isArray(dudasPersistidas)) {
+      dudasPersistidas.forEach((it) => {
+        if (it && it.id) mapaDudas.set(it.id, it);
+      });
     }
   }
 
-  const almacenDudasEnriquecido = Array.from(mapaDudas.values()).map((it) => {
+  const almacenDudasCompleto = Array.from(mapaDudas.values()).map((it) => {
     if (Array.isArray(it.recursosArgumentacion) && it.recursosArgumentacion.length > 0) {
       registrarRecursosDeItem(it.enunciado, it.recursosArgumentacion);
     }
     const clave = normalizarClaveRecursoPregunta(it.enunciado);
-    const rec = clave && Array.isArray(mapaRecursosGlobal[clave]) ? mapaRecursosGlobal[clave] : it.recursosArgumentacion;
+    const rec =
+      clave && Array.isArray(mapaRecursosGlobal[clave])
+        ? mapaRecursosGlobal[clave]
+        : it.recursosArgumentacion;
     return rec && rec.length > 0 ? { ...it, recursosArgumentacion: rec } : it;
   });
 
-  // 7. Consolidar Base de Datos de Documentos y Enlaces de Biblioteca (estrictamente sin archivos binarios) + Subtemas
   const docsOrigen =
     bibliotecaDocumentosOpcional !== undefined && bibliotecaDocumentosOpcional.length > 0
       ? bibliotecaDocumentosOpcional
@@ -3673,28 +3631,42 @@ export async function descargarCopiaSeguridadCompleta(
       mapaDocsBib.set(limpio.id, limpio);
     }
   });
-  const bibliotecaDocumentos = Array.from(mapaDocsBib.values());
+  const bibliotecaDocumentosCompleta = Array.from(mapaDocsBib.values());
 
-  const subtemasBiblioteca =
+  const subtemasCompleta =
     subtemasBibliotecaOpcional !== undefined && subtemasBibliotecaOpcional.length > 0
       ? guardarSubtemasBibliotecaEnLocalStorage(subtemasBibliotecaOpcional)
       : leerSubtemasBibliotecaDeLocalStorage();
 
-  // Contabilizar recursos y anotaciones totales tras cosecha completa
-  const totalRecursosArgumentacion = Object.values(mapaRecursosGlobal).reduce(
-    (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
-    0
-  );
-  const totalAnotaciones = Object.values(anotacionesPorExamen).reduce(
-    (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
-    0
-  );
-  const totalPreguntasBanco = bancoExamenes.reduce(
-    (acc, ex) => acc + (Array.isArray(ex.preguntas) ? ex.preguntas.length : 0),
-    0
-  );
+  // 7. Sincronizar y volcar en IndexedDB ANTES de verificar conteos contra IndexedDB
+  await escribirMultiplesEnIndexedDB({
+    c1_banco_examenes: bancoConsolidadoCompleto,
+    c1_historial_pruebas: historialConsolidadoCompleto,
+    c1_almacen_dudas: almacenDudasCompleto,
+    c1_biblioteca_documentos: bibliotecaDocumentosCompleta,
+    c1_biblioteca_subtemas: subtemasCompleta,
+    [STORAGE_KEY_RECURSOS_ARGUMENTACION]: mapaRecursosGlobal,
+    c1_examenes_eliminados: examenesEliminadosIds,
+  });
+  await esperarEscriturasPendientesIDB();
 
-  // 8. Control de preguntas superadas/falladas, preguntas recientes, descargas PDF y sesión activa
+  // Leer inventario directamente desde IndexedDB para validar al 100%
+  const inventarioIDB = await obtenerInventarioVerificadoIndexedDB();
+
+  // 8. Filtrar el payload según la modalidad elegida
+  let bancoAExportar: ExamenCompleto[] = [];
+  let historialAExportar: ExamenCompleto[] = [];
+  let anotacionesAExportar: Record<string, any[]> = {};
+  let dudasAExportar: ItemAlmacenDuda[] = [];
+  let docsAExportar: DocumentoBibliotecaItem[] = [];
+  let subtemasAExportar: string[] = [];
+  let recursosAExportar: Record<string, RecursoArgumentacionPregunta[]> = {};
+  let superadasAExportar: Record<string, any> = {};
+  let eliminadosAExportar: string[] = [];
+  let recientesAExportar: string[] = [];
+  let pdfsAExportar: any[] = [];
+  let sesionActivaAExportar: any = undefined;
+
   const controlPreguntasSuperadas = leerDatoPersistenteSincrono<Record<string, any>>(
     'c1_preguntas_superadas_v1',
     {}
@@ -3706,7 +3678,66 @@ export async function descargarCopiaSeguridadCompleta(
   const testsDescargadosPDF = leerDatoPersistenteSincrono<any[]>('c1_tests_descargados_pdf', []);
   const sesionExamenActiva = leerDatoPersistenteSincrono<any>('c1_active_exam_session', null);
 
-  // 9. Configuración completa y captura auxiliar de cualquier clave c1_* adicional
+  if (modalidad === 'completa') {
+    bancoAExportar = bancoConsolidadoCompleto;
+    historialAExportar = historialConsolidadoCompleto;
+    anotacionesAExportar = anotacionesTodas;
+    dudasAExportar = almacenDudasCompleto;
+    docsAExportar = bibliotecaDocumentosCompleta;
+    subtemasAExportar = subtemasCompleta;
+    recursosAExportar = mapaRecursosGlobal;
+    superadasAExportar = controlPreguntasSuperadas || {};
+    eliminadosAExportar = examenesEliminadosIds;
+    recientesAExportar = Array.isArray(historialPreguntasRecientes) ? historialPreguntasRecientes : [];
+    pdfsAExportar = Array.isArray(testsDescargadosPDF) ? testsDescargadosPDF : [];
+    sesionActivaAExportar = sesionExamenActiva || undefined;
+  } else if (modalidad === 'solo_progreso') {
+    // Excluye el banco de preguntas (0 exámenes del banco) y guarda progreso, historial, estadísticas, fallos, dudas, anotaciones y configuración
+    bancoAExportar = [];
+    historialAExportar = historialConsolidadoCompleto;
+    anotacionesAExportar = anotacionesTodas;
+    dudasAExportar = almacenDudasCompleto;
+    docsAExportar = bibliotecaDocumentosCompleta;
+    subtemasAExportar = subtemasCompleta;
+    recursosAExportar = mapaRecursosGlobal;
+    superadasAExportar = controlPreguntasSuperadas || {};
+    eliminadosAExportar = examenesEliminadosIds;
+    recientesAExportar = [];
+    pdfsAExportar = Array.isArray(testsDescargadosPDF) ? testsDescargadosPDF : [];
+    sesionActivaAExportar = undefined;
+  } else if (modalidad === 'seleccion_examenes') {
+    const setSeleccionados = new Set(idsExamenesSeleccionados || []);
+    if (setSeleccionados.size === 0) {
+      throw new Error('Selecciona al menos un bloque o examen para exportar una copia parcial.');
+    }
+    bancoAExportar = bancoConsolidadoCompleto.filter((ex) => setSeleccionados.has(ex.id));
+    if (bancoAExportar.length === 0) {
+      throw new Error('No se encontraron los exámenes seleccionados en la base de datos local.');
+    }
+    historialAExportar = [];
+    dudasAExportar = [];
+    docsAExportar = [];
+    subtemasAExportar = [];
+    superadasAExportar = {};
+    eliminadosAExportar = [];
+    recientesAExportar = [];
+    pdfsAExportar = [];
+    sesionActivaAExportar = undefined;
+
+    bancoAExportar.forEach((ex) => {
+      if (anotacionesTodas[ex.id]) {
+        anotacionesAExportar[ex.id] = anotacionesTodas[ex.id];
+      }
+      (ex.preguntas || []).forEach((p) => {
+        const clave = normalizarClaveRecursoPregunta(p.enunciado);
+        if (clave && mapaRecursosGlobal[clave]) {
+          recursosAExportar[clave] = mapaRecursosGlobal[clave];
+        }
+      });
+    });
+  }
+
+  // 9. Preferencias visuales ligeras de localStorage
   let darkMode = false;
   let autoAvanceAlFinal: boolean | undefined = undefined;
   let cortePropioTest: string | undefined = undefined;
@@ -3715,7 +3746,6 @@ export async function descargarCopiaSeguridadCompleta(
   let geminiApiKey: string | undefined = undefined;
   let geminiSelectedModel: string | undefined = undefined;
   let modoLecturaTamano: string | undefined = undefined;
-  const clavesAdicionalesLocalStorage: Record<string, string> = {};
 
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
@@ -3732,115 +3762,304 @@ export async function descargarCopiaSeguridadCompleta(
         undefined;
       geminiSelectedModel = localStorage.getItem('c1_selected_gemini_model') || undefined;
       modoLecturaTamano = localStorage.getItem('c1_modo_lectura_tamano') || undefined;
-
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (
-          k &&
-          k.startsWith('c1_') &&
-          !k.startsWith('c1_anotaciones_') &&
-          !CLAVES_TOP_LEVEL_GESTIONADAS.has(k)
-        ) {
-          const v = localStorage.getItem(k);
-          if (v !== null) {
-            clavesAdicionalesLocalStorage[k] = v;
-          }
-        }
-      }
     } catch (_) {}
   }
 
-  const backup: CopiaSeguridadIntegral = {
-    tipo: 'copia_seguridad_simulador_c1',
-    version: '3.7',
-    fecha: new Date().toISOString(),
-    metadata: {
-      totalBancoExamenes: bancoExamenes.length,
-      totalPreguntasBanco,
-      totalHistorialPruebas: historialPruebas.length,
-      totalExamenes: bancoExamenes.length + historialPruebas.length,
-      totalAnotaciones,
-      totalDudasAlmacen: almacenDudasEnriquecido.length,
-      totalDocumentosBiblioteca: bibliotecaDocumentos.length,
-      totalSubtemasBiblioteca: subtemasBiblioteca.length,
-      totalRecursosArgumentacion,
-      totalPreguntasControlFalladas: Object.keys(controlPreguntasSuperadas || {}).length,
-      timestamp: Date.now(),
-    },
-    bancoExamenes,
-    historialPruebas,
-    anotacionesPorExamen,
-    almacenDudas: almacenDudasEnriquecido,
-    bibliotecaDocumentos,
-    subtemasBiblioteca,
-    recursosArgumentacionPorPregunta: mapaRecursosGlobal,
-    controlPreguntasSuperadas: controlPreguntasSuperadas || {},
-    examenesEliminadosIds,
-    historialPreguntasRecientes: Array.isArray(historialPreguntasRecientes) ? historialPreguntasRecientes : [],
-    testsDescargadosPDF: Array.isArray(testsDescargadosPDF) ? testsDescargadosPDF : [],
-    sesionExamenActiva: sesionExamenActiva || undefined,
-    clavesAdicionalesLocalStorage:
-      Object.keys(clavesAdicionalesLocalStorage).length > 0 ? clavesAdicionalesLocalStorage : undefined,
-    configuracion: {
-      darkMode,
-      autoAvanceAlFinal,
-      cortePropioTest,
-      cortePropioSupuesto,
-      usarCortePropio,
-      geminiApiKey,
-      geminiSelectedModel,
-      modoLecturaTamano,
-    },
-  };
-
-  // Si hay gran volumen de exámenes/historial evitamos inflar innecesariamente con espacios repetidos para máxima fluidez y fiabilidad de escritura
-  const totalExamenesGlobal = bancoExamenes.length + historialPruebas.length;
-  const dataString =
-    totalExamenesGlobal > 60 ? JSON.stringify(backup) : JSON.stringify(backup, null, 2);
-
-  const fechaStr = new Date().toISOString().split('T')[0];
-  const nombreSugerido = `Copia_Seguridad_Simulador_C1_${fechaStr}.json`;
-
-  const guardado = await guardarArchivoConSelectorCarpeta(
-    dataString,
-    nombreSugerido,
-    'application/json',
-    '.json'
+  const totalRecursosArgumentacion = Object.values(recursosAExportar).reduce(
+    (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
+    0
+  );
+  const totalAnotaciones = Object.values(anotacionesAExportar).reduce(
+    (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
+    0
+  );
+  const totalPreguntasBanco = bancoAExportar.reduce(
+    (acc, ex) => acc + (Array.isArray(ex.preguntas) ? ex.preguntas.length : 0),
+    0
   );
 
-  if (!guardado) {
-    return { ok: false };
+  const backupRaw: CopiaSeguridadIntegral = {
+    tipo: 'copia_seguridad_simulador_c1',
+    version: '3.8',
+    modalidadExportacion: modalidad,
+    fecha: new Date().toISOString(),
+    metadata: {
+      modalidad,
+      totalBancoExamenes: bancoAExportar.length,
+      totalPreguntasBanco,
+      totalHistorialPruebas: historialAExportar.length,
+      totalExamenes: bancoAExportar.length + historialAExportar.length,
+      totalAnotaciones,
+      totalDudasAlmacen: dudasAExportar.length,
+      totalDocumentosBiblioteca: docsAExportar.length,
+      totalSubtemasBiblioteca: subtemasAExportar.length,
+      totalRecursosArgumentacion,
+      totalPreguntasControlFalladas: Object.keys(superadasAExportar || {}).length,
+      timestamp: Date.now(),
+    },
+    bancoExamenes: bancoAExportar,
+    historialPruebas: historialAExportar,
+    anotacionesPorExamen: anotacionesAExportar,
+    almacenDudas: dudasAExportar,
+    bibliotecaDocumentos: docsAExportar,
+    subtemasBiblioteca: subtemasAExportar,
+    recursosArgumentacionPorPregunta: recursosAExportar,
+    controlPreguntasSuperadas: superadasAExportar,
+    examenesEliminadosIds: eliminadosAExportar,
+    historialPreguntasRecientes: recientesAExportar,
+    testsDescargadosPDF: pdfsAExportar,
+    sesionExamenActiva: sesionActivaAExportar,
+    configuracion:
+      modalidad === 'seleccion_examenes'
+        ? {}
+        : {
+            darkMode,
+            autoAvanceAlFinal,
+            cortePropioTest,
+            cortePropioSupuesto,
+            usarCortePropio,
+            geminiApiKey,
+            geminiSelectedModel,
+            modoLecturaTamano,
+          },
+  };
+
+  // 10. Limpieza de propiedades vacías/redundantes y serialización compacta (sin indentación)
+  const payloadLimpio = limpiarPropiedadesRedundantes(backupRaw);
+  const jsonCompacto = JSON.stringify(payloadLimpio);
+
+  // 11. Validación interna obligatoria ANTES de disparar la descarga:
+  //     a) Integridad sintáctica JSON.parse
+  //     b) Coincidencia 100% del conteo de exámenes y preguntas con IndexedDB
+  let verificado: CopiaSeguridadIntegral;
+  try {
+    verificado = JSON.parse(jsonCompacto) as CopiaSeguridadIntegral;
+  } catch (_) {
+    throw new Error('Fallo de integridad interna al validar el JSON generado. Descarga abortada por seguridad.');
   }
 
-  const tamanoBytes = new Blob([dataString], { type: 'application/json;charset=utf-8' }).size;
+  const examenesExportadosVerif = Array.isArray(verificado.bancoExamenes) ? verificado.bancoExamenes.length : 0;
+  const preguntasExportadasVerif = (verificado.bancoExamenes || []).reduce(
+    (acc, ex) => acc + (Array.isArray(ex.preguntas) ? ex.preguntas.length : 0),
+    0
+  );
+  const historialExportadoVerif = Array.isArray(verificado.historialPruebas) ? verificado.historialPruebas.length : 0;
+
+  if (modalidad === 'completa') {
+    if (
+      examenesExportadosVerif !== inventarioIDB.totalExamenesBanco ||
+      preguntasExportadasVerif !== inventarioIDB.totalPreguntasBanco ||
+      historialExportadoVerif !== inventarioIDB.totalHistorial
+    ) {
+      throw new Error(
+        `Discrepancia detectada en verificación pre-descarga: exportados ${examenesExportadosVerif}/${inventarioIDB.totalExamenesBanco} exámenes y ${preguntasExportadasVerif}/${inventarioIDB.totalPreguntasBanco} preguntas respecto a IndexedDB.`
+      );
+    }
+  } else if (modalidad === 'solo_progreso') {
+    if (examenesExportadosVerif !== 0 || historialExportadoVerif !== inventarioIDB.totalHistorial) {
+      throw new Error(
+        `Discrepancia detectada en copia de progreso: historial exportado ${historialExportadoVerif}/${inventarioIDB.totalHistorial}.`
+      );
+    }
+  } else if (modalidad === 'seleccion_examenes') {
+    const setIdsSel = new Set(idsExamenesSeleccionados || []);
+    const seleccionEnIDB = inventarioIDB.bancoExamenesIDB.filter((ex) => ex && setIdsSel.has(ex.id));
+    const preguntasSelEnIDB = seleccionEnIDB.reduce(
+      (acc, ex) => acc + (Array.isArray(ex.preguntas) ? ex.preguntas.length : 0),
+      0
+    );
+    if (
+      examenesExportadosVerif !== seleccionEnIDB.length ||
+      preguntasExportadasVerif !== preguntasSelEnIDB
+    ) {
+      throw new Error(
+        `Discrepancia detectada en selección parcial: exportados ${examenesExportadosVerif}/${seleccionEnIDB.length} exámenes y ${preguntasExportadasVerif}/${preguntasSelEnIDB} preguntas respecto a IndexedDB.`
+      );
+    }
+  }
+
+  // 12. Generar Blob sin comprimir o comprimido con GZIP nativo y descargar mediante URL.createObjectURL
+  const blobJsonSinComprimir = new Blob([jsonCompacto], { type: 'application/json;charset=utf-8' });
+  const tamanoSinComprimirBytes = blobJsonSinComprimir.size;
+
+  const fechaStr = new Date().toISOString().split('T')[0];
+  const sufijoBase =
+    modalidad === 'completa'
+      ? `Copia_Completa_C1_${fechaStr}`
+      : modalidad === 'solo_progreso'
+      ? `Progreso_Historial_C1_${fechaStr}`
+      : `Bloque_Examenes_C1_${(etiquetaBloqueOSeleccion || `${examenesExportadosVerif}_tests`).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 28)}_${fechaStr}`;
+
+  const extensionArchivo = formato === 'json_gz' ? '.json.gz' : '.json';
+  const nombreArchivo = `${sufijoBase}${extensionArchivo}`;
+
+  const blobFinal =
+    formato === 'json_gz' ? await comprimirTextoAGzipBlob(jsonCompacto) : blobJsonSinComprimir;
+
+  const tamanoBytes = blobFinal.size;
+  const porcentajeReduccion =
+    tamanoSinComprimirBytes > 0 && tamanoBytes < tamanoSinComprimirBytes
+      ? Math.round((1 - tamanoBytes / tamanoSinComprimirBytes) * 100)
+      : 0;
+
+  const okDescarga = descargarBlobConObjectURL(blobFinal, nombreArchivo);
+  if (!okDescarga) {
+    throw new Error('No se pudo iniciar la descarga en el navegador.');
+  }
+
   return {
     ok: true,
     resumen: {
-      totalBancoExamenes: bancoExamenes.length,
-      totalPreguntasBanco,
-      totalHistorialPruebas: historialPruebas.length,
-      totalDudasAlmacen: almacenDudasEnriquecido.length,
-      totalDocumentosBiblioteca: bibliotecaDocumentos.length,
-      totalSubtemasBiblioteca: subtemasBiblioteca.length,
+      modalidad,
+      formato,
+      verificadoContraIDB: true,
+      totalBancoExamenes: examenesExportadosVerif,
+      totalPreguntasBanco: preguntasExportadasVerif,
+      totalHistorialPruebas: historialExportadoVerif,
+      totalDudasAlmacen: Array.isArray(verificado.almacenDudas) ? verificado.almacenDudas.length : 0,
+      totalDocumentosBiblioteca: Array.isArray(verificado.bibliotecaDocumentos)
+        ? verificado.bibliotecaDocumentos.length
+        : 0,
+      totalSubtemasBiblioteca: Array.isArray(verificado.subtemasBiblioteca)
+        ? verificado.subtemasBiblioteca.length
+        : 0,
       totalRecursosArgumentacion,
       totalAnotaciones,
-      totalPreguntasControlFalladas: Object.keys(controlPreguntasSuperadas || {}).length,
+      totalPreguntasControlFalladas: Object.keys(verificado.controlPreguntasSuperadas || {}).length,
+      tamanoSinComprimirBytes,
       tamanoBytes,
-      nombreArchivo: nombreSugerido,
+      porcentajeReduccion,
+      nombreArchivo,
     },
   };
 }
 
 /**
- * Procesa y restaura íntegramente una Copia de Seguridad Integral Única desde un archivo JSON/TXT
- * restaurando todos los aspectos de la aplicación sin pérdida de campos ni truncado por cuota:
- * Banco de Exámenes, Historial de Pruebas, Biblioteca (Dudas + Notas + Enlaces + Subtemas),
- * Recursos de Argumentación, Anotaciones, Control de Falladas/Superadas, Sesión y Configuración.
+ * Mantiene compatibilidad directa con llamadas existentes descargando Copia Completa en .json.
  */
-export function restaurarCopiaSeguridadCompleta(
-  rawText: string,
-  opciones?: { modo?: 'fusionar' | 'reemplazar' }
-): {
+export async function descargarCopiaSeguridadCompleta(
+  bancoOExamenes: ExamenCompleto[],
+  historialOpcional?: ExamenCompleto[],
+  almacenDudasOpcional?: ItemAlmacenDuda[],
+  bibliotecaDocumentosOpcional?: DocumentoBibliotecaItem[],
+  subtemasBibliotecaOpcional?: string[],
+  examenesEliminadosOpcional?: string[],
+  formato: FormatoExportacionCopia = 'json'
+): Promise<{ ok: boolean; resumen?: ResumenCopiaSeguridadExportada }> {
+  return exportarCopiaSeguridadAvanzada({
+    modalidad: 'completa',
+    formato,
+    bancoExamenes: bancoOExamenes,
+    historialPruebas: historialOpcional,
+    almacenDudas: almacenDudasOpcional,
+    bibliotecaDocumentos: bibliotecaDocumentosOpcional,
+    subtemasBiblioteca: subtemasBibliotecaOpcional,
+    examenesEliminadosIds: examenesEliminadosOpcional,
+  });
+}
+
+/**
+ * Valida rigurosamente que un texto JSON de copia de seguridad o examen esté completo,
+ * bien formado y sin truncamientos ANTES de tocar ningún dato existente en memoria o IndexedDB.
+ */
+export function validarIntegridadArchivoCopiaOExamen(rawText: string): any {
+  if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
+    throw new Error('Archivo corrupto o incompleto: el archivo está vacío.');
+  }
+
+  const cleaned = limpiarTextoJSON(rawText);
+  const firstChar = cleaned[0];
+  const lastChar = cleaned[cleaned.length - 1];
+
+  if (
+    !(
+      (firstChar === '{' && lastChar === '}') ||
+      (firstChar === '[' && lastChar === ']')
+    )
+  ) {
+    throw new Error(
+      'Archivo corrupto o incompleto: el contenido JSON está truncado (cierre de estructura inexistente). Tus datos actuales siguen intactos.'
+    );
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (_) {
+    throw new Error(
+      'Archivo corrupto o incompleto: sintaxis JSON dañada o archivo cortado durante su descarga. Tus datos actuales no han sido modificados.'
+    );
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Archivo corrupto o incompleto: estructura raíz inválida.');
+  }
+
+  const validarListaExamenesIntegridad = (lista: any[], nombreSeccion: string) => {
+    for (let i = 0; i < lista.length; i++) {
+      const ex = lista[i];
+      if (!ex || typeof ex !== 'object' || !Array.isArray(ex.preguntas)) {
+        throw new Error(
+          `Archivo corrupto o incompleto: el examen #${i + 1} en "${nombreSeccion}" carece de lista de preguntas válida.`
+        );
+      }
+      for (let j = 0; j < ex.preguntas.length; j++) {
+        const p = ex.preguntas[j];
+        if (!p || typeof p.enunciado !== 'string' || !Array.isArray(p.opciones) || p.opciones.length === 0) {
+          throw new Error(
+            `Archivo corrupto o incompleto: pregunta truncada en "${ex.titulo || `#${i + 1}`}" (pregunta #${j + 1}).`
+          );
+        }
+      }
+    }
+  };
+
+  if (parsed.tipo === 'copia_seguridad_simulador_c1') {
+    if (parsed.bancoExamenes !== undefined && !Array.isArray(parsed.bancoExamenes)) {
+      throw new Error('Archivo corrupto o incompleto: "bancoExamenes" no es una lista válida.');
+    }
+    if (parsed.historialPruebas !== undefined && !Array.isArray(parsed.historialPruebas)) {
+      throw new Error('Archivo corrupto o incompleto: "historialPruebas" no es una lista válida.');
+    }
+    if (Array.isArray(parsed.bancoExamenes)) {
+      validarListaExamenesIntegridad(parsed.bancoExamenes, 'bancoExamenes');
+    }
+    if (Array.isArray(parsed.historialPruebas)) {
+      validarListaExamenesIntegridad(parsed.historialPruebas, 'historialPruebas');
+    }
+    if (Array.isArray(parsed.examenesGuardados)) {
+      validarListaExamenesIntegridad(parsed.examenesGuardados, 'examenesGuardados');
+    }
+
+    // Si la copia incluye metadatos de conteo, verificar que el archivo no quedó cortado a mitad
+    if (
+      parsed.metadata &&
+      typeof parsed.metadata.totalBancoExamenes === 'number' &&
+      Array.isArray(parsed.bancoExamenes) &&
+      parsed.bancoExamenes.length !== parsed.metadata.totalBancoExamenes
+    ) {
+      throw new Error(
+        `Archivo corrupto o incompleto: la cabecera declara ${parsed.metadata.totalBancoExamenes} exámenes pero el archivo contiene ${parsed.bancoExamenes.length}.`
+      );
+    }
+  } else if (Array.isArray(parsed)) {
+    if (parsed.length === 0) {
+      throw new Error('Archivo corrupto o incompleto: el listado de exámenes está vacío.');
+    }
+    validarListaExamenesIntegridad(parsed, 'listado');
+  } else if (parsed.titulo && Array.isArray(parsed.preguntas)) {
+    validarListaExamenesIntegridad([parsed], 'examen');
+  } else if (!Array.isArray(parsed.bibliotecaDocumentos) && !Array.isArray(parsed.almacenDudas)) {
+    throw new Error(
+      'Archivo corrupto o incompleto: el archivo no corresponde a una copia de seguridad ni a un examen válido.'
+    );
+  }
+
+  return parsed;
+}
+
+export interface ResultadoRestauracionCopia {
+  modalidadDetectada: ModalidadExportacionCopia;
   bancoExamenes: ExamenCompleto[];
   historialPruebas: ExamenCompleto[];
   examenes: ExamenCompleto[];
@@ -3852,24 +4071,82 @@ export function restaurarCopiaSeguridadCompleta(
   modoLecturaTamanoRestaurado?: string;
   anotacionesRestauradas: number;
   recursosRestaurados: number;
-} {
-  const modo = opciones?.modo || 'fusionar';
-  const cleaned = limpiarTextoJSON(rawText);
-  let parsed: any;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (_) {
-    throw new Error('El archivo de copia de seguridad no contiene un formato JSON válido.');
-  }
+  preguntasBancoTotales: number;
+}
 
+/**
+ * Procesa, valida primero sin destructividad y restaura/fusiona una Copia de Seguridad (.json o descomprimida de .json.gz)
+ * guardando el resultado inmediatamente en IndexedDB.
+ */
+export function restaurarCopiaSeguridadCompleta(
+  rawText: string,
+  opciones?: { modo?: 'fusionar' | 'reemplazar' }
+): ResultadoRestauracionCopia {
+  const modo = opciones?.modo || 'fusionar';
+
+  // 1. Validación estricta ANTES de modificar ni un solo dato existente
+  const parsed = validarIntegridadArchivoCopiaOExamen(rawText);
+
+  const modalidadDetectada: ModalidadExportacionCopia =
+    parsed.modalidadExportacion === 'solo_progreso' ||
+    parsed?.metadata?.modalidad === 'solo_progreso'
+      ? 'solo_progreso'
+      : parsed.modalidadExportacion === 'seleccion_examenes' ||
+        parsed?.metadata?.modalidad === 'seleccion_examenes'
+      ? 'seleccion_examenes'
+      : 'completa';
+
+  const convertirSinPerdida = (item: any): ExamenCompleto =>
+    validarYConvertirJSON(item, { preservarResultadoIntegro: true });
+
+  // 2. Parsear y convertir primero TODOS los exámenes en memoria temporal (si hubiera un fallo, no se toca nada existente)
   let bancoImportado: ExamenCompleto[] = [];
   let historialImportado: ExamenCompleto[] = [];
+
+  if (
+    parsed.tipo === 'copia_seguridad_simulador_c1' &&
+    (Array.isArray(parsed.bancoExamenes) || Array.isArray(parsed.historialPruebas))
+  ) {
+    if (Array.isArray(parsed.bancoExamenes)) {
+      bancoImportado = parsed.bancoExamenes.map(convertirSinPerdida);
+    }
+    if (Array.isArray(parsed.historialPruebas)) {
+      historialImportado = parsed.historialPruebas.map(convertirSinPerdida);
+    }
+  } else if (parsed.tipo === 'copia_seguridad_simulador_c1' && Array.isArray(parsed.examenesGuardados)) {
+    const todos = parsed.examenesGuardados.map(convertirSinPerdida);
+    historialImportado = todos.filter((e: ExamenCompleto) => !!e.resultado);
+    bancoImportado = todos.filter((e: ExamenCompleto) => !e.resultado);
+  } else if (Array.isArray(parsed)) {
+    const todos = parsed.map(convertirSinPerdida);
+    historialImportado = todos.filter((e: ExamenCompleto) => !!e.resultado);
+    bancoImportado = todos.filter((e: ExamenCompleto) => !e.resultado);
+  } else if (parsed.titulo && Array.isArray(parsed.preguntas)) {
+    const unExamen = convertirSinPerdida(parsed);
+    if (unExamen.resultado) {
+      historialImportado = [unExamen];
+    } else {
+      bancoImportado = [unExamen];
+    }
+  } else if (Array.isArray(parsed.bibliotecaDocumentos) || Array.isArray(parsed.almacenDudas)) {
+    bancoImportado = [];
+    historialImportado = [];
+  }
+
+  // A partir de aquí el archivo es 100% íntegro: aplicar Restaurar (sobrescribir) o Fusionar
   let anotacionesCount = 0;
   let recursosCount = 0;
 
-  // 1. Restaurar recursos de argumentación por pregunta
+  if (modo === 'reemplazar' && modalidadDetectada !== 'seleccion_examenes') {
+    void limpiarTodasLasAnotacionesDeIndexedDB();
+  }
+
+  // 3. Recursos de argumentación por pregunta
   if (parsed.recursosArgumentacionPorPregunta && typeof parsed.recursosArgumentacionPorPregunta === 'object') {
-    const mapaBase = modo === 'reemplazar' ? {} : leerMapaRecursosArgumentacionGlobal();
+    const mapaBase =
+      modo === 'reemplazar' && modalidadDetectada !== 'seleccion_examenes'
+        ? {}
+        : leerMapaRecursosArgumentacionGlobal();
     Object.entries(parsed.recursosArgumentacionPorPregunta).forEach(([clave, lista]) => {
       if (Array.isArray(lista) && lista.length > 0) {
         mapaBase[clave] = lista as RecursoArgumentacionPregunta[];
@@ -3877,9 +4154,11 @@ export function restaurarCopiaSeguridadCompleta(
       }
     });
     guardarEnLocalStorageSeguro(STORAGE_KEY_RECURSOS_ARGUMENTACION, mapaBase);
+  } else if (modo === 'reemplazar' && modalidadDetectada === 'completa') {
+    guardarEnLocalStorageSeguro(STORAGE_KEY_RECURSOS_ARGUMENTACION, {});
   }
 
-  // 2. Restaurar control de preguntas superadas/falladas
+  // 4. Control de preguntas superadas/falladas
   if (parsed.controlPreguntasSuperadas && typeof parsed.controlPreguntasSuperadas === 'object') {
     const actualObj =
       modo === 'reemplazar'
@@ -3887,25 +4166,32 @@ export function restaurarCopiaSeguridadCompleta(
         : leerDatoPersistenteSincrono<Record<string, any>>('c1_preguntas_superadas_v1', {});
     const fusionado = { ...actualObj, ...parsed.controlPreguntasSuperadas };
     guardarEnLocalStorageSeguro('c1_preguntas_superadas_v1', fusionado);
+  } else if (modo === 'reemplazar' && modalidadDetectada !== 'seleccion_examenes') {
+    guardarEnLocalStorageSeguro('c1_preguntas_superadas_v1', {});
   }
 
-  // 3. Restaurar IDs de exámenes eliminados
+  // 5. IDs de exámenes eliminados
   let examenesEliminadosIds: string[] =
-    modo === 'reemplazar'
+    modo === 'reemplazar' && modalidadDetectada === 'completa'
       ? []
       : leerDatoPersistenteSincrono<string[]>('c1_examenes_eliminados', []);
 
   if (Array.isArray(parsed.examenesEliminadosIds)) {
     examenesEliminadosIds = Array.from(
-      new Set([...(Array.isArray(examenesEliminadosIds) ? examenesEliminadosIds : []), ...parsed.examenesEliminadosIds])
+      new Set([
+        ...(Array.isArray(examenesEliminadosIds) ? examenesEliminadosIds : []),
+        ...parsed.examenesEliminadosIds,
+      ])
     );
-    guardarEnLocalStorageSeguro('c1_examenes_eliminados', examenesEliminadosIds);
   }
+  guardarEnLocalStorageSeguro('c1_examenes_eliminados', examenesEliminadosIds);
   const setEliminados = new Set(examenesEliminadosIds);
 
-  // 4. Restaurar historial de preguntas recientes, tests descargados PDF y sesión activa
+  // 6. Historial reciente, descargas PDF y sesión activa
   if (Array.isArray(parsed.historialPreguntasRecientes)) {
     guardarEnLocalStorageSeguro('c1_historial_preguntas_recientes', parsed.historialPreguntasRecientes);
+  } else if (modo === 'reemplazar' && modalidadDetectada === 'completa') {
+    guardarEnLocalStorageSeguro('c1_historial_preguntas_recientes', []);
   }
 
   if (Array.isArray(parsed.testsDescargadosPDF)) {
@@ -3924,17 +4210,7 @@ export function restaurarCopiaSeguridadCompleta(
     guardarEnLocalStorageSeguro('c1_active_exam_session', parsed.sesionExamenActiva);
   }
 
-  if (parsed.clavesAdicionalesLocalStorage && typeof parsed.clavesAdicionalesLocalStorage === 'object') {
-    Object.entries(parsed.clavesAdicionalesLocalStorage).forEach(([k, v]) => {
-      if (k.startsWith('c1_') && typeof v === 'string') {
-        try {
-          localStorage.setItem(k, v);
-        } catch (_) {}
-      }
-    });
-  }
-
-  // 5. Restaurar Configuración completa
+  // 7. Preferencias visuales ligeras en localStorage
   let darkModeRestaurado: boolean | undefined = undefined;
   let modoLecturaTamanoRestaurado: string | undefined = undefined;
   if (parsed.configuracion && typeof parsed.configuracion === 'object') {
@@ -3969,78 +4245,27 @@ export function restaurarCopiaSeguridadCompleta(
     } catch (_) {}
   }
 
-  // 6. Extraer Banco e Historial preservando 100% de metadatos y resultados
-  const convertirSinPerdida = (item: any): ExamenCompleto =>
-    validarYConvertirJSON(item, { preservarResultadoIntegro: true });
-
-  // Caso A: Copia v2.5 / v2.6 / v3.2 / v3.7 con bancoExamenes e historialPruebas separados
-  if (
-    parsed.tipo === 'copia_seguridad_simulador_c1' &&
-    (Array.isArray(parsed.bancoExamenes) || Array.isArray(parsed.historialPruebas))
-  ) {
-    if (Array.isArray(parsed.bancoExamenes)) {
-      bancoImportado = parsed.bancoExamenes.map(convertirSinPerdida);
-    }
-    if (Array.isArray(parsed.historialPruebas)) {
-      historialImportado = parsed.historialPruebas.map(convertirSinPerdida);
-    }
-
-    if (parsed.anotacionesPorExamen && typeof parsed.anotacionesPorExamen === 'object') {
-      Object.entries(parsed.anotacionesPorExamen).forEach(([examId, notas]) => {
-        if (Array.isArray(notas)) {
-          guardarEnLocalStorageSeguro(`c1_anotaciones_${examId}`, notas);
-          anotacionesCount += notas.length;
-        }
-      });
-    }
-  }
-  // Caso B: Copia v1.0 con examenesGuardados
-  else if (parsed.tipo === 'copia_seguridad_simulador_c1' && Array.isArray(parsed.examenesGuardados)) {
-    const todos = parsed.examenesGuardados.map(convertirSinPerdida);
-    historialImportado = todos.filter((e: ExamenCompleto) => !!e.resultado);
-    bancoImportado = todos.filter((e: ExamenCompleto) => !e.resultado);
-
-    if (parsed.anotacionesPorExamen && typeof parsed.anotacionesPorExamen === 'object') {
-      Object.entries(parsed.anotacionesPorExamen).forEach(([examId, notas]) => {
-        if (Array.isArray(notas)) {
-          guardarEnLocalStorageSeguro(`c1_anotaciones_${examId}`, notas);
-          anotacionesCount += notas.length;
-        }
-      });
-    }
-  }
-  // Caso C: Array simple de exámenes
-  else if (Array.isArray(parsed)) {
-    const todos = parsed.map(convertirSinPerdida);
-    historialImportado = todos.filter((e: ExamenCompleto) => !!e.resultado);
-    bancoImportado = todos.filter((e: ExamenCompleto) => !e.resultado);
-  }
-  // Caso D: Un único examen
-  else if (parsed.titulo && parsed.preguntas) {
-    const unExamen = convertirSinPerdida(parsed);
-    if (unExamen.resultado) {
-      historialImportado = [unExamen];
-    } else {
-      bancoImportado = [unExamen];
-    }
-  }
-  // Caso E: Retrocompatibilidad con archivos JSON previos de Biblioteca
-  else if (Array.isArray(parsed.bibliotecaDocumentos) || Array.isArray(parsed.almacenDudas)) {
-    bancoImportado = [];
-    historialImportado = [];
-  } else {
-    throw new Error('El archivo no tiene la estructura de una copia de seguridad ni de examen oficial.');
+  // 8. Anotaciones por examen
+  if (parsed.anotacionesPorExamen && typeof parsed.anotacionesPorExamen === 'object') {
+    Object.entries(parsed.anotacionesPorExamen).forEach(([examId, notas]) => {
+      if (Array.isArray(notas)) {
+        guardarEnLocalStorageSeguro(`c1_anotaciones_${examId}`, notas);
+        anotacionesCount += notas.length;
+      }
+    });
   }
 
-  // 7. Consolidar Banco e Historial según modo ('fusionar' conserva datos locales + aplica copia; 'reemplazar' deja exactamente la copia)
+  // 9. Consolidar Banco de Exámenes según modo y modalidad del archivo
   const mapaBancoFinal = new Map<string, ExamenCompleto>();
-  EXAMENES_PRECARGADOS_OFICIALES.forEach((prec) => {
-    if (prec && prec.id && !setEliminados.has(prec.id)) {
-      mapaBancoFinal.set(prec.id, asegurarSeparacionYNormativaReserva(prec));
-    }
-  });
+  const conservarBancoExistente =
+    modo === 'fusionar' || modalidadDetectada === 'solo_progreso';
 
-  if (modo === 'fusionar') {
+  if (conservarBancoExistente) {
+    EXAMENES_PRECARGADOS_OFICIALES.forEach((prec) => {
+      if (prec && prec.id && !setEliminados.has(prec.id)) {
+        mapaBancoFinal.set(prec.id, asegurarSeparacionYNormativaReserva(prec));
+      }
+    });
     const bancoExistente = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_banco_examenes', []);
     if (Array.isArray(bancoExistente)) {
       bancoExistente.forEach((ex) => {
@@ -4049,7 +4274,15 @@ export function restaurarCopiaSeguridadCompleta(
         }
       });
     }
+  } else if (bancoImportado.length > 0 && modalidadDetectada === 'completa') {
+    // En modo 'reemplazar' sobre copia completa, dejar exactamente los exámenes de la copia (+ precargados no eliminados si procedía de versión antigua)
+    EXAMENES_PRECARGADOS_OFICIALES.forEach((prec) => {
+      if (prec && prec.id && !setEliminados.has(prec.id)) {
+        mapaBancoFinal.set(prec.id, asegurarSeparacionYNormativaReserva(prec));
+      }
+    });
   }
+
   bancoImportado.forEach((ex) => {
     if (ex && ex.id && !setEliminados.has(ex.id)) {
       mapaBancoFinal.set(ex.id, ex);
@@ -4057,27 +4290,27 @@ export function restaurarCopiaSeguridadCompleta(
   });
   const bancoExamenes = Array.from(mapaBancoFinal.values());
 
+  // 10. Consolidar Historial de Pruebas
   const mapaHistorialFinal = new Map<string, ExamenCompleto>();
-  if (modo === 'fusionar') {
+  const conservarHistorialExistente =
+    modo === 'fusionar' || modalidadDetectada === 'seleccion_examenes';
+
+  if (conservarHistorialExistente) {
     const histExistente = leerDatoPersistenteSincrono<ExamenCompleto[]>('c1_historial_pruebas', []);
     if (Array.isArray(histExistente)) {
       histExistente.forEach((h) => {
-        if (h && h.id) {
-          mapaHistorialFinal.set(h.id, h);
-        }
+        if (h && h.id) mapaHistorialFinal.set(h.id, h);
       });
     }
   }
   historialImportado.forEach((h) => {
-    if (h && h.id) {
-      mapaHistorialFinal.set(h.id, h);
-    }
+    if (h && h.id) mapaHistorialFinal.set(h.id, h);
   });
   const historialPruebas = Array.from(mapaHistorialFinal.values());
 
-  // 8. Consolidar Biblioteca: Almacén de Dudas, Base de Datos de Documentos/Enlaces y Subtemas
+  // 11. Consolidar Biblioteca (Dudas, Enlaces y Subtemas)
   let almacenDudasRestauradas: ItemAlmacenDuda[];
-  if (modo === 'reemplazar' && Array.isArray(parsed.almacenDudas)) {
+  if (modo === 'reemplazar' && modalidadDetectada !== 'seleccion_examenes' && Array.isArray(parsed.almacenDudas)) {
     almacenDudasRestauradas = parsed.almacenDudas.map((it: ItemAlmacenDuda) => {
       if (Array.isArray(it.recursosArgumentacion) && it.recursosArgumentacion.length > 0 && it.enunciado) {
         guardarRecursosArgumentacionDePregunta(it.enunciado, it.recursosArgumentacion);
@@ -4095,7 +4328,11 @@ export function restaurarCopiaSeguridadCompleta(
   }
 
   let bibliotecaDocumentosRestaurados: DocumentoBibliotecaItem[];
-  if (modo === 'reemplazar' && Array.isArray(parsed.bibliotecaDocumentos)) {
+  if (
+    modo === 'reemplazar' &&
+    modalidadDetectada !== 'seleccion_examenes' &&
+    Array.isArray(parsed.bibliotecaDocumentos)
+  ) {
     bibliotecaDocumentosRestaurados = guardarBibliotecaDocumentosEnLocalStorage(parsed.bibliotecaDocumentos);
   } else {
     bibliotecaDocumentosRestaurados = fusionarBibliotecaDocumentosEnLocalStorage(
@@ -4104,7 +4341,11 @@ export function restaurarCopiaSeguridadCompleta(
   }
 
   let subtemasBibliotecaRestaurados: string[];
-  if (modo === 'reemplazar' && Array.isArray(parsed.subtemasBiblioteca)) {
+  if (
+    modo === 'reemplazar' &&
+    modalidadDetectada !== 'seleccion_examenes' &&
+    Array.isArray(parsed.subtemasBiblioteca)
+  ) {
     subtemasBibliotecaRestaurados = guardarSubtemasBibliotecaEnLocalStorage(parsed.subtemasBiblioteca);
   } else {
     subtemasBibliotecaRestaurados = fusionarSubtemasBibliotecaEnLocalStorage(
@@ -4112,7 +4353,7 @@ export function restaurarCopiaSeguridadCompleta(
     );
   }
 
-  // 9. Persistir Banco, Historial y anotaciones embebidas de forma íntegra (IndexedDB + memoria + localStorage)
+  // 12. Persistir inmediatamente en IndexedDB
   guardarEnLocalStorageSeguro('c1_banco_examenes', bancoExamenes);
   guardarEnLocalStorageSeguro('c1_historial_pruebas', historialPruebas);
 
@@ -4123,7 +4364,13 @@ export function restaurarCopiaSeguridadCompleta(
     }
   });
 
+  const preguntasBancoTotales = bancoExamenes.reduce(
+    (acc, ex) => acc + (Array.isArray(ex.preguntas) ? ex.preguntas.length : 0),
+    0
+  );
+
   return {
+    modalidadDetectada,
     bancoExamenes,
     historialPruebas,
     examenes: [...bancoExamenes, ...historialPruebas],
@@ -4135,15 +4382,29 @@ export function restaurarCopiaSeguridadCompleta(
     modoLecturaTamanoRestaurado,
     anotacionesRestauradas: anotacionesCount,
     recursosRestaurados: recursosCount,
+    preguntasBancoTotales,
   };
 }
 
 /**
- * Guarda datos de forma 100% íntegra en IndexedDB + Caché en Memoria + localStorage,
- * SIN recortar ni truncar jamás colecciones de usuario cuando localStorage alcance su tope de 5MB.
+ * Versión asíncrona que espera a que todas las transacciones de IndexedDB se completen en disco.
+ */
+export async function restaurarCopiaSeguridadCompletaAsync(
+  rawText: string,
+  opciones?: { modo?: 'fusionar' | 'reemplazar' }
+): Promise<ResultadoRestauracionCopia> {
+  const res = restaurarCopiaSeguridadCompleta(rawText, opciones);
+  await esperarEscriturasPendientesIDB();
+  return res;
+}
+
+/**
+ * Guarda datos pesados exclusivamente en IndexedDB + caché en memoria viva
+ * (sin tocar localStorage para colecciones de exámenes, historial, dudas ni biblioteca).
  */
 export function guardarEnLocalStorageSeguro(key: string, data: any): boolean {
   return guardarDatoPersistenteIntegral(key, data);
 }
+
 
 
