@@ -25,6 +25,7 @@ import {
   soportaCompresionGzipNativa,
 } from '../utils/backupCompression';
 import { EstadoBaseDatosIDB } from '../utils/idbPersistentStore';
+import { SelectorCarpetaDestinoExportacion } from './SelectorCarpetaDestinoExportacion';
 
 interface GestorCopiasSeguridadModalProps {
   isOpen: boolean;
@@ -460,6 +461,9 @@ export const GestorCopiasSeguridadModal: React.FC<GestorCopiasSeguridadModalProp
               </button>
             </div>
           </div>
+
+          {/* Selector de carpeta al guardar copia de seguridad (Carpeta por defecto o Seleccionar cualquier carpeta) */}
+          <SelectorCarpetaDestinoExportacion compacto />
 
           {/* CONTENIDO MODALIDAD 1: COPIA COMPLETA */}
           {modalidadActiva === 'completa' && (

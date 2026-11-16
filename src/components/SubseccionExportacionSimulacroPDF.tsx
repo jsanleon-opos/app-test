@@ -33,6 +33,11 @@ import {
   TipoDocumentoPrevisualizado,
   VisorPrevisualizacionPdfOficial,
 } from './VisorPrevisualizacionPdfOficial';
+import { SelectorCarpetaDestinoExportacion } from './SelectorCarpetaDestinoExportacion';
+import {
+  ArchivoExportableItem,
+  guardarArchivosSegunPreferenciaCarpeta,
+} from '../utils/exportFolderManager';
 
 export interface GrupoMateriaExportable {
   nombre: string;
@@ -741,30 +746,63 @@ export const SubseccionExportacionSimulacroPDF: React.FC<
     });
   };
 
-  const ejecutarDescargaManual = (
+  const ejecutarDescargaManual = async (
     tipoArchivo: RegistroTestDescargadoPDF['tipoArchivo']
   ) => {
     if (!examenEnsamblado || !paquetePDF) return;
 
+    const archivosAGuardar: ArchivoExportableItem[] = [];
+
     if (tipoArchivo === 'solo_examen') {
-      descargarBlobPDF(paquetePDF.cuadernilloBlob, paquetePDF.cuadernilloNombreArchivo);
+      archivosAGuardar.push({
+        blob: paquetePDF.cuadernilloBlob,
+        nombreArchivo: paquetePDF.cuadernilloNombreArchivo,
+        mimeType: 'application/pdf',
+      });
     } else if (tipoArchivo === 'solo_plantilla') {
-      descargarBlobPDF(paquetePDF.plantillaOMRBlob, paquetePDF.plantillaOMRNombreArchivo);
+      archivosAGuardar.push({
+        blob: paquetePDF.plantillaOMRBlob,
+        nombreArchivo: paquetePDF.plantillaOMRNombreArchivo,
+        mimeType: 'application/pdf',
+      });
     } else if (tipoArchivo === 'todo_en_1_pdf') {
-      descargarBlobPDF(paquetePDF.combinadoBlob, paquetePDF.combinadoNombreArchivo);
+      archivosAGuardar.push({
+        blob: paquetePDF.combinadoBlob,
+        nombreArchivo: paquetePDF.combinadoNombreArchivo,
+        mimeType: 'application/pdf',
+      });
     } else if (tipoArchivo === 'solo_anexo_boe') {
-      descargarBlobPDF(
-        paquetePDF.anexoJustificacionesBlob,
-        paquetePDF.anexoJustificacionesNombreArchivo
-      );
+      archivosAGuardar.push({
+        blob: paquetePDF.anexoJustificacionesBlob,
+        nombreArchivo: paquetePDF.anexoJustificacionesNombreArchivo,
+        mimeType: 'application/pdf',
+      });
     } else if (tipoArchivo === 'examen_y_plantilla') {
-      descargarBlobPDF(paquetePDF.cuadernilloBlob, paquetePDF.cuadernilloNombreArchivo);
-      setTimeout(() => {
-        descargarBlobPDF(
-          paquetePDF.plantillaOMRBlob,
-          paquetePDF.plantillaOMRNombreArchivo
-        );
-      }, 340);
+      archivosAGuardar.push(
+        {
+          blob: paquetePDF.cuadernilloBlob,
+          nombreArchivo: paquetePDF.cuadernilloNombreArchivo,
+          mimeType: 'application/pdf',
+        },
+        {
+          blob: paquetePDF.plantillaOMRBlob,
+          nombreArchivo: paquetePDF.plantillaOMRNombreArchivo,
+          mimeType: 'application/pdf',
+        }
+      );
+    }
+
+    const resGuardado = await guardarArchivosSegunPreferenciaCarpeta(archivosAGuardar);
+    if (resGuardado.cancelado) return;
+
+    if (!resGuardado.ok && archivosAGuardar.length > 0) {
+      archivosAGuardar.forEach((item, i) => {
+        if (i === 0) {
+          descargarBlobPDF(item.blob, item.nombreArchivo);
+        } else {
+          setTimeout(() => descargarBlobPDF(item.blob, item.nombreArchivo), i * 340);
+        }
+      });
     }
 
     const actualizados = registrarDescargaTestEnLocalStorage({
@@ -776,11 +814,14 @@ export const SubseccionExportacionSimulacroPDF: React.FC<
       tipoArchivo,
     });
     setTestsDescargados(actualizados);
-    notificarAccion(`✓ Descargado: ${ETIQUETA_TIPO_ARCHIVO[tipoArchivo]} (Modelo ${modelo})`);
+    const carpetaTxt = resGuardado.nombreCarpetaUsada
+      ? ` → ${resGuardado.nombreCarpetaUsada}`
+      : '';
+    notificarAccion(`✓ Guardado: ${ETIQUETA_TIPO_ARCHIVO[tipoArchivo]} (Modelo ${modelo})${carpetaTxt}`);
   };
 
   // Función adicional: Descargar Pack Doble Aula (Modelo A original + Modelo B con preguntas barajadas y clave propia)
-  const ejecutarDescargaPackDobleModelosAyB = () => {
+  const ejecutarDescargaPackDobleModelosAyB = async () => {
     if (!examenEnsamblado) return;
 
     const pieA = deducirCodigoPiePorDefecto(examenEnsamblado, 'A');
@@ -811,10 +852,27 @@ export const SubseccionExportacionSimulacroPDF: React.FC<
       supuestoAdicional1: supuestoAdicional2Examen,
     });
 
-    descargarBlobPDF(paqA.combinadoBlob, paqA.combinadoNombreArchivo);
-    setTimeout(() => {
-      descargarBlobPDF(paqB.combinadoBlob, paqB.combinadoNombreArchivo);
-    }, 380);
+    const resGuardado = await guardarArchivosSegunPreferenciaCarpeta([
+      {
+        blob: paqA.combinadoBlob,
+        nombreArchivo: paqA.combinadoNombreArchivo,
+        mimeType: 'application/pdf',
+      },
+      {
+        blob: paqB.combinadoBlob,
+        nombreArchivo: paqB.combinadoNombreArchivo,
+        mimeType: 'application/pdf',
+      },
+    ]);
+
+    if (resGuardado.cancelado) return;
+
+    if (!resGuardado.ok) {
+      descargarBlobPDF(paqA.combinadoBlob, paqA.combinadoNombreArchivo);
+      setTimeout(() => {
+        descargarBlobPDF(paqB.combinadoBlob, paqB.combinadoNombreArchivo);
+      }, 380);
+    }
 
     const actualizados = registrarDescargaTestEnLocalStorage({
       examenId: examenEnsamblado.id,
@@ -1660,6 +1718,9 @@ export const SubseccionExportacionSimulacroPDF: React.FC<
                 </div>
               </div>
             )}
+
+            {/* SELECTOR DE CARPETA DE DESTINO (Carpeta por defecto o Seleccionar cualquier carpeta) */}
+            <SelectorCarpetaDestinoExportacion compacto />
 
             {/* BOTONES DE DESCARGA BAJO DEMANDA */}
             <div className="space-y-2.5 pt-1">

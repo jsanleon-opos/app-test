@@ -15,6 +15,11 @@ import {
   TipoDocumentoPrevisualizado,
   VisorPrevisualizacionPdfOficial,
 } from './VisorPrevisualizacionPdfOficial';
+import { SelectorCarpetaDestinoExportacion } from './SelectorCarpetaDestinoExportacion';
+import {
+  ArchivoExportableItem,
+  guardarArchivosSegunPreferenciaCarpeta,
+} from '../utils/exportFolderManager';
 
 interface ExportarExamenPdfModalProps {
   examen: ExamenCompleto | null;
@@ -145,42 +150,63 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
     });
   };
 
-  const ejecutarDescargaExplicita = (
+  const ejecutarDescargaExplicita = async (
     tipoArchivo: RegistroTestDescargadoPDF['tipoArchivo']
   ) => {
     if (!examen || !paqueteActual) return;
 
+    const archivosAGuardar: ArchivoExportableItem[] = [];
+
     if (tipoArchivo === 'solo_examen') {
-      descargarBlobPDF(
-        paqueteActual.cuadernilloBlob,
-        paqueteActual.cuadernilloNombreArchivo
-      );
+      archivosAGuardar.push({
+        blob: paqueteActual.cuadernilloBlob,
+        nombreArchivo: paqueteActual.cuadernilloNombreArchivo,
+        mimeType: 'application/pdf',
+      });
     } else if (tipoArchivo === 'solo_plantilla') {
-      descargarBlobPDF(
-        paqueteActual.plantillaOMRBlob,
-        paqueteActual.plantillaOMRNombreArchivo
-      );
+      archivosAGuardar.push({
+        blob: paqueteActual.plantillaOMRBlob,
+        nombreArchivo: paqueteActual.plantillaOMRNombreArchivo,
+        mimeType: 'application/pdf',
+      });
     } else if (tipoArchivo === 'todo_en_1_pdf') {
-      descargarBlobPDF(
-        paqueteActual.combinadoBlob,
-        paqueteActual.combinadoNombreArchivo
-      );
+      archivosAGuardar.push({
+        blob: paqueteActual.combinadoBlob,
+        nombreArchivo: paqueteActual.combinadoNombreArchivo,
+        mimeType: 'application/pdf',
+      });
     } else if (tipoArchivo === 'solo_anexo_boe') {
-      descargarBlobPDF(
-        paqueteActual.anexoJustificacionesBlob,
-        paqueteActual.anexoJustificacionesNombreArchivo
-      );
+      archivosAGuardar.push({
+        blob: paqueteActual.anexoJustificacionesBlob,
+        nombreArchivo: paqueteActual.anexoJustificacionesNombreArchivo,
+        mimeType: 'application/pdf',
+      });
     } else if (tipoArchivo === 'examen_y_plantilla') {
-      descargarBlobPDF(
-        paqueteActual.cuadernilloBlob,
-        paqueteActual.cuadernilloNombreArchivo
+      archivosAGuardar.push(
+        {
+          blob: paqueteActual.cuadernilloBlob,
+          nombreArchivo: paqueteActual.cuadernilloNombreArchivo,
+          mimeType: 'application/pdf',
+        },
+        {
+          blob: paqueteActual.plantillaOMRBlob,
+          nombreArchivo: paqueteActual.plantillaOMRNombreArchivo,
+          mimeType: 'application/pdf',
+        }
       );
-      setTimeout(() => {
-        descargarBlobPDF(
-          paqueteActual.plantillaOMRBlob,
-          paqueteActual.plantillaOMRNombreArchivo
-        );
-      }, 320);
+    }
+
+    const resGuardado = await guardarArchivosSegunPreferenciaCarpeta(archivosAGuardar);
+    if (resGuardado.cancelado) return;
+
+    if (!resGuardado.ok && archivosAGuardar.length > 0) {
+      archivosAGuardar.forEach((item, i) => {
+        if (i === 0) {
+          descargarBlobPDF(item.blob, item.nombreArchivo);
+        } else {
+          setTimeout(() => descargarBlobPDF(item.blob, item.nombreArchivo), i * 320);
+        }
+      });
     }
 
     const actualizados = registrarDescargaTestEnLocalStorage({
@@ -195,8 +221,11 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
     setDescargaRealizadaEnSesion(true);
 
     if (onNotificarDescarga) {
+      const carpetaInfo = resGuardado.nombreCarpetaUsada
+        ? ` en «${resGuardado.nombreCarpetaUsada}»`
+        : '';
       onNotificarDescarga(
-        `Descarga iniciada (${ETIQUETA_TIPO_ARCHIVO[tipoArchivo]}): "${examen.titulo}".`
+        `Guardado (${ETIQUETA_TIPO_ARCHIVO[tipoArchivo]})${carpetaInfo}: "${examen.titulo}".`
       );
     }
   };
@@ -406,6 +435,9 @@ export const ExportarExamenPdfModal: React.FC<ExportarExamenPdfModalProps> = ({
           }
         >
           <div className={mostrarPrevisualizacion ? 'xl:col-span-5 space-y-4' : 'space-y-4'}>
+        {/* Selector de carpeta de guardado: Carpeta por defecto o Seleccionar cualquier carpeta */}
+        <SelectorCarpetaDestinoExportacion compacto />
+
         {/* Dos cuadros diferenciados: 1) Cuadernillo de Examen y 2) Plantilla Oficial Hoja de Respuestas */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {/* Cuadro 1: Cuadernillo de Examen Oficial */}

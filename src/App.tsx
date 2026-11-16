@@ -1543,7 +1543,11 @@ export default function App() {
   }, [historialPruebas, almacenDudas, versionFalladasApp]);
 
   return (
-    <div className={`min-h-screen flex flex-col ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-200/80 text-slate-900'}`}>
+    <div
+      className={`${
+        modoLecturaActivo ? 'h-dvh max-h-dvh overflow-hidden' : 'min-h-screen'
+      } flex flex-col ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-200/80 text-slate-900'}`}
+    >
       {/* Toast Notification Banner */}
       {toastNotificacion && (
         <div className="fixed top-4 right-4 z-50 max-w-md animate-fade-in shadow-xl">
@@ -1603,10 +1607,10 @@ export default function App() {
                     type="button"
                     onClick={() => setMostrarModalVersion(true)}
                     className="text-[9px] sm:text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 font-mono inline-flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                    title="Ver novedades y últimos cambios de la Versión 3.7"
+                    title="Ver novedades y últimos cambios de la Versión 3.9"
                   >
                     <i className="fa-solid fa-sparkles text-[8px] text-amber-300"></i>
-                    <span>v3.7 · Novedades</span>
+                    <span>v3.9 · Novedades</span>
                   </button>
                   <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-mono flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -1635,7 +1639,7 @@ export default function App() {
                     className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
                   >
                     <i className="fa-solid fa-clock-rotate-left text-[8.5px]"></i>
-                    <span>Actualización v3.8 (Persistencia IndexedDB +10.000 Preguntas · Compresión GZIP .json.gz · 3 Modalidades de Copia)</span>
+                    <span>Actualización v3.9 (Buscador Biblioteca · Títulos/Capítulos IA · Modo Lectura Ajustado · Selector Carpeta Exportación)</span>
                   </button>
                 </p>
               </div>
@@ -1668,10 +1672,10 @@ export default function App() {
                 type="button"
                 onClick={() => setMostrarModalVersion(true)}
                 className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                title="Notas de la versión 3.8 y últimos cambios implementados"
+                title="Notas de la versión 3.9 y últimos cambios implementados"
               >
                 <i className="fa-solid fa-code-branch text-emerald-600 dark:text-emerald-400 text-[11px]"></i>
-                <span className="hidden sm:inline">Versión 3.8</span>
+                <span className="hidden sm:inline">Versión 3.9</span>
               </button>
 
               <button
@@ -1817,16 +1821,24 @@ export default function App() {
         </div>
       </header>
 
-      {/* MAIN CONTAINER (Centrado sin distracciones en Modo Lectura; ancho completo en vista normal) */}
+      {/* MAIN CONTAINER (Ajustado exactamente a la altura de la ventana en Modo Lectura sin desbordamiento inferior) */}
       <main
         className={
           modoLecturaActivo
-            ? 'flex-1 w-full max-w-5xl mx-auto py-4 sm:py-7 px-3 sm:px-6 space-y-4 transition-all'
+            ? 'flex-1 min-h-0 w-full max-w-5xl mx-auto py-2 sm:py-3 px-2.5 sm:px-5 flex flex-col overflow-hidden transition-all'
             : 'flex-1 w-full max-w-[1920px] mx-auto p-3 sm:p-5 lg:p-6 space-y-6'
         }
       >
         {/* TAB 1: DASHBOARD PRINCIPAL (PROGRESO TEMÁTICO DIARIO + GENERADOR IA) */}
-        <div className={tabActiva === 'generador' ? 'block' : 'hidden'}>
+        <div
+          className={
+            tabActiva === 'generador'
+              ? modoLecturaActivo
+                ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+                : 'block'
+              : 'hidden'
+          }
+        >
           {!modoLecturaActivo && (
             <ProgresoTematicoDiarioWidget
               historialPruebas={historialPruebas}
@@ -3094,7 +3106,7 @@ export default function App() {
                     onClick={() => setMostrarModalVersion(true)}
                     className="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 cursor-pointer"
                   >
-                    Versión 3.8.0 · Ver últimos cambios
+                    Versión 3.9.0 · Ver últimos cambios
                   </button>
                   <span className="text-slate-300 dark:text-slate-700">•</span>
                   <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -3382,10 +3394,10 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      Notas de Versión v3.8.0
+                      Notas de Versión v3.9.0
                     </h3>
                     <span className="text-[10px] font-mono font-black uppercase text-emerald-700 dark:text-emerald-300">
-                      · Arquitectura IndexedDB + GZIP (.json.gz) + 3 Modalidades de Copia
+                      · Búsqueda Biblioteca · Títulos/Capítulos IA · Modo Lectura Autoajuste · Carpeta Exportación
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -3403,15 +3415,27 @@ export default function App() {
             </div>
 
             <div className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-2xl bg-indigo-50/95 dark:bg-indigo-950/45 border border-indigo-300 dark:border-indigo-800/80 space-y-1.5">
+                <div className="font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
+                  <i className="fa-solid fa-wand-magic-sparkles text-indigo-600"></i>
+                  <span>Novedad v3.9.0 · Buscador Unificado en Biblioteca, Títulos/Capítulos IA, Autoajuste Modo Lectura y Carpeta de Guardado</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  • <strong>Buscador en tiempo real en «Biblioteca»</strong>: filtra simultáneamente tanto el <em>Almacén de Dudas y Notas</em> como la <em>Base de Datos de Documentos y Enlaces</em> con contadores instantáneos.<br />
+                  • <strong>Selección de aspecto concreto de Ley o Real Decreto en IA</strong>: permite elegir Títulos, Capítulos, Secciones o rangos de Artículos específicos al generar tests y supuestos.<br />
+                  • <strong>Modo Lectura autoajustado a la ventana</strong>: escala automáticamente tipografía, márgenes y distribución vertical para que enunciado, opciones A–D y botonera inferior queden siempre visibles sin corte inferior.<br />
+                  • <strong>Selector de carpeta en ventanas de Exportación</strong>: permite guardar directamente en una <em>Carpeta por defecto</em> configurable o <em>Seleccionar cualquier carpeta</em> al exportar PDFs y Copias de Seguridad.
+                </p>
+              </div>
+
               <div className="p-3.5 rounded-2xl bg-emerald-50/95 dark:bg-emerald-950/45 border border-emerald-300 dark:border-emerald-800/80 space-y-1.5">
                 <div className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
                   <i className="fa-solid fa-database text-emerald-600"></i>
-                  <span>Novedad v3.8.0 · Persistencia Nativa IndexedDB (+10.000 Preguntas) y Compresión GZIP</span>
+                  <span>Versión 3.8.0 · Persistencia Nativa IndexedDB (+10.000 Preguntas) y Compresión GZIP</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
                   • <strong>Almacenamiento persistente 100% en IndexedDB</strong>: adiós al límite de 5 MB de <code>localStorage</code>. Soporta más de 10.000 preguntas, 300 exámenes y colecciones de +20 MB con carga instantánea al abrir la app y guardado automático en segundo plano.<br />
-                  • <strong>Exportación por Blob + Compresión nativa GZIP (<code>.json.gz</code>)</strong>: eliminado cualquier uso de <code>data:text/json</code>; serialización compacta con ahorro del 80-85% y validación interna previa frente a IndexedDB.<br />
-                  • <strong>Tres modalidades de exportación e importación inteligente</strong>: <em>Copia Completa</em>, <em>Solo Progreso e Historial</em> (ultraligero) y <em>Por Bloques o Exámenes seleccionados</em>, con soporte de importación <code>.json</code> y <code>.json.gz</code> en modos <em>Fusionar</em> o <em>Restaurar</em>.
+                  • <strong>Exportación por Blob + Compresión nativa GZIP (<code>.json.gz</code>)</strong>: serialización compacta con ahorro del 80-85% y 3 modalidades de exportación e importación inteligente.
                 </p>
               </div>
 
@@ -3424,21 +3448,11 @@ export default function App() {
                   • Modo Lectura en todos los visores de preguntas (atajo Alt+L) que oculta elementos laterales y presenta enunciado y opciones centrados con fuente ampliada ajustable.
                 </p>
               </div>
-
-              <div className="p-3.5 rounded-2xl bg-indigo-50/90 dark:bg-indigo-950/40 border border-indigo-300 dark:border-indigo-800/80 space-y-1.5">
-                <div className="font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
-                  <i className="fa-solid fa-file-pdf text-indigo-600"></i>
-                  <span>Versiones 3.4–3.6 · Simulacro Oficial en 2 Pestañas y Previsualización PDF CPS/INAP</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  • Cabecera unificada en 1 cuadro, Progreso Diario cerrado por defecto, visor A4 interactivo de previsualización PDF y generación de cuadernillo oficial con Hoja OMR en blanco.
-                </p>
-              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[11px] font-mono text-slate-400">
-                Versión 3.8.0 · Simulador C1 AGE & Comunidad de Madrid
+                Versión 3.9.0 · Simulador C1 AGE & Comunidad de Madrid
               </span>
               <button
                 type="button"

@@ -15,6 +15,8 @@ interface BaseDatosDocumentosViewProps {
   onActualizarDocumentos: (docs: DocumentoBibliotecaItem[]) => void;
   subtemasDisponibles: string[];
   onActualizarSubtemas: (subtemas: string[]) => void;
+  busquedaGlobal?: string;
+  onCambiarBusquedaGlobal?: (valor: string) => void;
 }
 
 // Persistencia ligera de punteros FileSystemFileHandle en IndexedDB del navegador
@@ -196,6 +198,8 @@ export const BaseDatosDocumentosView: React.FC<BaseDatosDocumentosViewProps> = (
   onActualizarDocumentos,
   subtemasDisponibles,
   onActualizarSubtemas,
+  busquedaGlobal,
+  onCambiarBusquedaGlobal,
 }) => {
   // Vista activa: 'listado' (por defecto, igual que Historial y Banco de Exámenes) o 'tarjetas'
   const [vistaDocumentos, setVistaDocumentos] = useState<'listado' | 'tarjetas'>('listado');
@@ -208,8 +212,20 @@ export const BaseDatosDocumentosView: React.FC<BaseDatosDocumentosViewProps> = (
   const [columnaOrden, setColumnaOrden] = useState<'titulo' | 'tipo' | 'ambito' | 'normativa' | 'fecha'>('fecha');
   const [direccionOrden, setDireccionOrden] = useState<'asc' | 'desc'>('desc');
 
-  // Estados de búsqueda y filtros
-  const [busqueda, setBusqueda] = useState('');
+  // Estados de búsqueda y filtros (sincronizados en tiempo real con el buscador unificado de Biblioteca)
+  const [busquedaInterna, setBusquedaInterna] = useState('');
+  const busqueda = typeof busquedaGlobal === 'string' ? busquedaGlobal : busquedaInterna;
+  const setBusqueda = (valor: string) => {
+    setBusquedaInterna(valor);
+    if (onCambiarBusquedaGlobal) {
+      onCambiarBusquedaGlobal(valor);
+    }
+  };
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [busqueda]);
+
   const [filtroTipoEnlace, setFiltroTipoEnlace] = useState<'todos' | 'web_externa' | 'documento_local'>('todos');
   const [filtroAmbito, setFiltroAmbito] = useState<'todos' | ConvocatoriaAmbito>('todos');
   const [filtroLeyODecreto, setFiltroLeyODecreto] = useState<string>('todas');

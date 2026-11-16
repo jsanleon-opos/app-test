@@ -27,6 +27,8 @@ interface AlmacenDudasViewProps {
   onVerJustificacionPregunta?: (pregunta: PreguntaExamen) => void;
   onNavegarATab?: (tab: string) => void;
   onActualizarPreguntaGlobal?: (preguntaActualizada: PreguntaExamen) => void;
+  busquedaGlobal?: string;
+  onCambiarBusquedaGlobal?: (valor: string) => void;
 }
 
 type TipoNotaCreable = 'articulo_clave' | 'plazo_computo' | 'atajo_mnemotecnia' | 'informatica';
@@ -37,9 +39,19 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
   onVerJustificacionPregunta,
   onNavegarATab,
   onActualizarPreguntaGlobal,
+  busquedaGlobal,
+  onCambiarBusquedaGlobal,
 }) => {
-  // Filtros y Búsqueda
-  const [busqueda, setBusqueda] = useState('');
+  // Filtros y Búsqueda (sincronizada con el buscador global de Biblioteca si está presente)
+  const [busquedaInterna, setBusquedaInterna] = useState('');
+  const busqueda = onCambiarBusquedaGlobal ? (busquedaGlobal ?? '') : busquedaInterna;
+  const setBusqueda = (valor: string) => {
+    if (onCambiarBusquedaGlobal) {
+      onCambiarBusquedaGlobal(valor);
+    } else {
+      setBusquedaInterna(valor);
+    }
+  };
   const [filtroTipo, setFiltroTipo] = useState<
     'todos' | TipoItemAlmacen | 'preguntas_falladas' | 'preguntas_acertadas' | 'pendientes' | 'resueltas' | 'informatica'
   >('todos');
@@ -204,7 +216,7 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
   const itemsFiltrados = useMemo(() => {
     let res = [...itemsDudas];
 
-    // Búsqueda textual
+    // Búsqueda textual (incluyendo justificación legal y opciones para coherencia total con Biblioteca)
     if (busqueda.trim()) {
       const q = busqueda.toLowerCase().trim();
       res = res.filter((i) => {
@@ -212,6 +224,13 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
         const tit = (i.titulo || '').toLowerCase();
         const com = (i.comentarioUsuario || '').toLowerCase();
         const reg = (i.reglaMnemotecnica || '').toLowerCase();
+        const just = i.justificacionLegal
+          ? `${i.justificacionLegal.norma || ''} ${i.justificacionLegal.articulo || ''} ${i.justificacionLegal.fundamento || ''}`.toLowerCase()
+          : '';
+        const opcionesTxt = (i.opciones || [])
+          .map((o) => `${o.texto || ''} ${o.explicacion || ''}`)
+          .join(' ')
+          .toLowerCase();
         const art = i.articuloClave
           ? `${i.articuloClave.ley} ${i.articuloClave.articulo} ${i.articuloClave.literalArticulo} ${i.articuloClave.resumenOClave}`.toLowerCase()
           : '';
@@ -231,6 +250,8 @@ export const AlmacenDudasView: React.FC<AlmacenDudasViewProps> = ({
           tit.includes(q) ||
           com.includes(q) ||
           reg.includes(q) ||
+          just.includes(q) ||
+          opcionesTxt.includes(q) ||
           art.includes(q) ||
           pl.includes(q) ||
           mn.includes(q) ||

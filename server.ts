@@ -59,18 +59,27 @@ app.post('/api/generate-exam', async (req, res) => {
     numPreguntas = 10,
     dificultad = 'trampa_tribunal',
     preguntasExcluidas = [],
+    acotacionNormativa = '',
   } = req.body || {};
 
   const tematicasStr = tematicas.length > 0 ? tematicas.join(', ') : 'Temario general';
   const leyesStr = leyes.length > 0 ? leyes.join(', ') : 'Legislación básica consolidada publicada en www.boe.es';
+  const acotacionLimpia = typeof acotacionNormativa === 'string' ? acotacionNormativa.trim() : '';
+
+  const bloqueAcotacionPrompt = acotacionLimpia
+    ? `\n### ACOTACIÓN OBLIGATORIA DE TÍTULO, CAPÍTULO, SECCIÓN O ARTÍCULOS CONCRETOS
+El opositor ha solicitado evaluar de forma ESPECÍFICA y MONOGRÁFICA el siguiente apartado concreto de la Ley o Real Decreto:
+"${acotacionLimpia}"
+REGLA DE ACOTACIÓN INQUEBRANTABLE:
+- El 100% de las preguntas generadas (y el relato fáctico si es un supuesto práctico) DEBE versar estrictamente sobre los Títulos, Capítulos, Secciones, Libros o Artículos especificados arriba ("${acotacionLimpia}").
+- Queda PROHIBIDO formular preguntas sobre otros Títulos, Capítulos o artículos fuera de ese ámbito acotado salvo remisión directa indispensable del propio precepto.
+- Refleja este aspecto concreto en la propiedad "titulo" del examen generado.\n`
+    : '';
 
   // Strictly enforce user-requested quantities: 5, 10, 20, 70 (or custom)
   const allowedCounts = [5, 10, 20, 70];
   const numParsed = parseInt(String(numPreguntas), 10);
   const targetCount = allowedCounts.includes(numParsed) ? numParsed : Math.max(1, numParsed || 10);
-
-  // Set sufficient output tokens to prevent JSON truncation (4096 for 5-10, 8192 for 20, 20480 for 70)
-  const tokensNeeded = targetCount >= 70 ? 20480 : targetCount >= 20 ? 8192 : 4096;
 
   let excluidasPrompt = '';
   if (Array.isArray(preguntasExcluidas) && preguntasExcluidas.length > 0) {
@@ -84,7 +93,9 @@ app.post('/api/generate-exam', async (req, res) => {
   // If no GEMINI_API_KEY, return high quality curated BOE bank immediately
   if (!process.env.GEMINI_API_KEY) {
     console.warn('GEMINI_API_KEY not defined, returning guaranteed high-yield BOE test.');
-    return res.json(generarBancoPreguntasBOE(tipo, ambito, targetCount, tematicasStr, leyesStr, preguntasExcluidas));
+    return res.json(
+      generarBancoPreguntasBOE(tipo, ambito, targetCount, tematicasStr, leyesStr, preguntasExcluidas, acotacionLimpia)
+    );
   }
 
   try {
@@ -95,7 +106,7 @@ Fuente oficial obligatoria y exclusiva: www.boe.es (Boletín Oficial del Estado)
 Temáticas acotadas: ${tematicasStr}.
 Leyes BOE seleccionadas (POOL EXCLUSIVO): ${leyesStr}.
 Nivel de exigencia: ${dificultad} (supuesto real de tribunal oficial, con datos fácticos precisos, fechas, plazos y resoluciones).
-Número EXACTO de preguntas asociadas al supuesto: ${targetCount}.
+Número EXACTO de preguntas asociadas al supuesto: ${targetCount}.${bloqueAcotacionPrompt}
 
 ### FILTRADO ESTRICTO DE FUENTES NORMATIVAS (REGLA DE EXCLUSIÓN TOTAL)
 1. Queda TERMINANTEMENTE PROHIBIDO generar preguntas de normas, leyes o reglamentos cuyas casillas NO hayan sido marcadas explícitamente en el panel de configuración (o que hayan sido desmarcadas).
@@ -167,7 +178,7 @@ Estructura obligatoria:
 Fuente oficial obligatoria y exclusiva: www.boe.es (Boletín Oficial del Estado).
 Temáticas acotadas: ${tematicasStr}.
 Leyes BOE seleccionadas (POOL EXCLUSIVO): ${leyesStr}.
-Nivel de exigencia: ${dificultad} (literalidad de plazos, competencias orgánicas, silencios administrativos y trampas oficiales de examen).
+Nivel de exigencia: ${dificultad} (literalidad de plazos, competencias orgánicas, silencios administrativos y trampas oficiales de examen).${bloqueAcotacionPrompt}
 
 ### FILTRADO ESTRICTO DE FUENTES NORMATIVAS (REGLA DE EXCLUSIÓN TOTAL)
 1. Queda TERMINANTEMENTE PROHIBIDO generar preguntas de normas, leyes o reglamentos cuyas casillas NO hayan sido marcadas explícitamente en el panel de configuración (o que hayan sido desmarcadas).
@@ -226,10 +237,9 @@ Cada pregunta debe incluir:
     }
 
     const geminiCall = ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       contents: userPrompt,
       config: {
-        maxOutputTokens: tokensNeeded,
         systemInstruction: `Eres el Presidente del Tribunal Calificador de las oposiciones de Administrativos (C1 AGE / Comunidad de Madrid).
 REGLA INQUEBRANTABLE: Toda la normativa, fundamentaciones, artículos y soluciones deben provenir y fundamentarse de forma EXCLUSIVA en la legislación oficial consolidada publicada en la web oficial del Boletín Oficial del Estado (www.boe.es).
 Cada justificación legal debe indicar expresamente el código BOE (ej. BOE-A-2015-10565 para Ley 39/2015, BOE-A-1978-31229 para Constitución, BOE-A-2015-10566 para Ley 40/2015, BOE-A-2015-11719 para TREBEP, BOE-A-1995-8729 para RD 364/1995, BOE-A-1995-7451 para RD 365/1995, BOE-A-2018-16673 para Ley 3/2018, BOE-A-2017-12902 para Contratos, BOE-A-2003-21618 para LGP, BOE-A-2013-12887 para Transparencia, etc.) y la URL canónica de www.boe.es.
@@ -237,7 +247,11 @@ Cada justificación legal debe indicar expresamente el código BOE (ej. BOE-A-20
 FILTRADO ESTRICTO DE FUENTES NORMATIVAS (REGLA DE EXCLUSIÓN TOTAL):
 1. Queda TERMINANTEMENTE PROHIBIDO generar preguntas de normas, leyes o reglamentos cuyas casillas NO hayan sido marcadas explícitamente en el panel de configuración (o que hayan sido desmarcadas).
 2. Si la casilla de la Ley 39/2015 (LPACAP) NO está seleccionada en la legislación específica, no generes ninguna pregunta basada en ella, aunque aparezca seleccionada la temática general de procedimiento.
-3. El pool normativo activo se restringe ÚNICA Y EXCLUSIVAMENTE a las normas marcadas en «Leyes BOE seleccionadas»: "${leyesStr}". Si solo están marcados el TREBEP (RDL 5/2015), el RD 364/1995 y el RD 365/1995, el 100% de las preguntas de la tanda debe distribuirse exclusivamente entre esas 3 normas. Actúa igual con cualquier otra selección: 0% de preguntas de leyes no marcadas.
+3. El pool normativo activo se restringe ÚNICA Y EXCLUSIVAMENTE a las normas marcadas en «Leyes BOE seleccionadas»: "${leyesStr}". Si solo están marcados el TREBEP (RDL 5/2015), el RD 364/1995 y el RD 365/1995, el 100% de las preguntas de la tanda debe distribuirse exclusivamente entre esas 3 normas. Actúa igual con cualquier otra selección: 0% de preguntas de leyes no marcadas.${
+          acotacionLimpia
+            ? `\n4. ACOTACIÓN ESPECÍFICA OBLIGATORIA DE TÍTULO / CAPÍTULO / ARTÍCULOS: Céntrate estricta y exclusivamente en "${acotacionLimpia}". Todas las preguntas deben evaluar preceptos pertenecientes a dicho Título, Capítulo, Sección o rango de artículos.`
+            : ''
+        }
 
 PAUTAS ESPECÍFICAS DE PREGUNTAS Y GENERACIÓN INÉDITA:
 1. GENERACIÓN INÉDITA Y NO REPETICIÓN RADICAL (ANTI-DUPLICADOS):
@@ -341,7 +355,15 @@ Genera exactamente ${targetCount} preguntas completas con 4 opciones (A, B, C, D
     // 2) Queda terminantemente prohibido clonar una misma pregunta con diferentes respuestas (misma huella conceptual).
     // 3) Rotación obligatoria de preceptos: no repetir el mismo artículo legal concreto en el mismo test.
     // 4) Regla de exclusión: 0% de preguntas de leyes no marcadas en leyesStr.
-    const bancoGarantizado = generarBancoPreguntasBOE(tipo, ambito, targetCount * 2, tematicasStr, leyesStr, preguntasExcluidas);
+    const bancoGarantizado = generarBancoPreguntasBOE(
+      tipo,
+      ambito,
+      targetCount * 2,
+      tematicasStr,
+      leyesStr,
+      preguntasExcluidas,
+      acotacionLimpia
+    );
     let bancoGarantizadoIdx = 0;
 
     const enunciadosVistos = new Set<string>();
@@ -463,7 +485,15 @@ Genera exactamente ${targetCount} preguntas completas con 4 opciones (A, B, C, D
 
     // Completar si faltaran preguntas
     if (preguntasFinales.length < targetCount) {
-      const bancoAux = generarBancoPreguntasBOE(tipo, ambito, targetCount * 2, tematicasStr, leyesStr, preguntasExcluidas);
+      const bancoAux = generarBancoPreguntasBOE(
+        tipo,
+        ambito,
+        targetCount * 2,
+        tematicasStr,
+        leyesStr,
+        preguntasExcluidas,
+        acotacionLimpia
+      );
       for (const r of bancoAux.preguntas) {
         if (preguntasFinales.length >= targetCount) break;
         const rNorm = (r.enunciado || '').slice(0, 80).toLowerCase().trim();
@@ -497,7 +527,7 @@ Genera exactamente ${targetCount} preguntas completas con 4 opciones (A, B, C, D
     const tipoFinal = parsed.tipo || tipo;
     return res.json({
       source: 'gemini_boe',
-      titulo: parsed.titulo || `Batería Oficial BOE (${ambito}) - ${targetCount} Preguntas`,
+      titulo: parsed.titulo || `Batería Oficial BOE (${ambito}) - ${targetCount} Preguntas${acotacionLimpia ? ` · [${acotacionLimpia}]` : ''}`,
       tipo: tipoFinal,
       categoria: tipoFinal === 'supuesto' ? 'supuesto_ia' : 'test_ia',
       ambito: parsed.ambito || ambito,
@@ -508,7 +538,15 @@ Genera exactamente ${targetCount} preguntas completas con 4 opciones (A, B, C, D
   } catch (error: any) {
     console.error('Error generando con Gemini, activando banco normativo garantizado:', error.message || error);
     // Return guaranteed curated bank with exact requested count (10, 20, etc.)
-    const fallback = generarBancoPreguntasBOE(tipo, ambito, targetCount, tematicasStr, leyesStr, preguntasExcluidas);
+    const fallback = generarBancoPreguntasBOE(
+      tipo,
+      ambito,
+      targetCount,
+      tematicasStr,
+      leyesStr,
+      preguntasExcluidas,
+      acotacionLimpia
+    );
     (fallback as any).categoria = tipo === 'supuesto' ? 'supuesto_ia' : 'test_ia';
     return res.json(fallback);
   }
@@ -551,9 +589,8 @@ app.post('/api/parse-pdf-exam', async (req, res) => {
       },
     };
 
-    // Note: Gemini 1.5 models (gemini-1.5-flash / gemini-1.5-pro) are deprecated in the v1beta API and return 404.
-    // We map legacy requests safely to gemini-3.8-flash, which supports full PDF multimodal extraction.
-    const targetModel = 'gemini-3.8-flash';
+    // Use gemini-4-hydrogen for full PDF multimodal extraction
+    const targetModel = 'gemini-4-hydrogen';
 
     console.log(`[parse-pdf-exam] Recibido archivo ${fileName} (${(cleanBase64.length / 1024).toFixed(1)} KB base64). Usando modelo: ${targetModel}`);
 
@@ -826,7 +863,7 @@ ${examText}
 """`;
 
     const response = await aiClient.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       contents: promptText,
       config: {
         systemInstruction: `Eres un examinador oficial experto en digitalización de pruebas de oposición (Administrativos C1 de la AGE y Comunidad de Madrid).
@@ -1092,7 +1129,7 @@ ${caseText.trim()}
 
       // Intentos con modelo primario y secundario con reintento ante saturación transitoria (503)
       let parsedResponse: any = null;
-      const modelsToTry = ['gemini-3.8-flash', 'gemini-2.5-flash'];
+      const modelsToTry = ['gemini-4-hydrogen', 'gemini-3.1-flash-lite'];
 
       for (const modelName of modelsToTry) {
         try {
@@ -1101,7 +1138,6 @@ ${caseText.trim()}
             model: modelName,
             contents: promptText,
             config: {
-              maxOutputTokens: 16000,
               systemInstruction: `Eres el Tribunal Calificador oficial de oposiciones C1 (${ambito}). Tu tarea es formular exactamente 20 preguntas (15 ordinarias + 5 reservas) profundamente ancladas en los hechos, actos, fechas, importes y órganos del supuesto fáctico aportado. Prohibido formular preguntas al azar o genéricas sin base en el caso. Cada pregunta debe contener: numero (1 a 20), enunciado vinculado al caso, opciones {A, B, C, D}, solucion ('A','B','C','D'), es_reserva (true para 16-20) y justificacionLegal rigurosa del BOE/BOCM.`,
               responseMimeType: 'application/json',
               responseSchema: {

@@ -5712,7 +5712,8 @@ export function generarBancoPreguntasBOE(
   cantidad: number = 10,
   tematicas: string = '',
   leyes: string = '',
-  preguntasExcluidas: string[] = []
+  preguntasExcluidas: string[] = [],
+  acotacionEspecifica: string = ''
 ) {
   const isSupuesto = tipo === 'supuesto';
   const fuenteBase = isSupuesto ? PREGUNTAS_SUPUESTO_BOE : PREGUNTAS_UNITARIAS_BOE;
@@ -5722,6 +5723,61 @@ export function generarBancoPreguntasBOE(
   const cantidadDeseada = allowedCounts.includes(numParsed) ? numParsed : Math.max(1, numParsed || 10);
 
   const tagsSolicitados = identificarTagsSolicitados(leyes, tematicas);
+
+  // Extraer tokens y rangos de artículos si el opositor acotó un Título, Capítulo, Sección o Artículos
+  const acotacionLimpia = (acotacionEspecifica || '').trim();
+  const numerosArticulosAcotados = new Set<number>();
+  const palabrasClaveAcotadas: string[] = [];
+
+  if (acotacionLimpia) {
+    // Detectar rangos del tipo "Arts. 21 a 28", "Artículos 53-68", "art. 30"
+    const regexRangos = /(\d{1,3})\s*(?:a|al|-|–)\s*(\d{1,3})/gi;
+    let matchRango: RegExpExecArray | null;
+    while ((matchRango = regexRangos.exec(acotacionLimpia)) !== null) {
+      const ini = parseInt(matchRango[1], 10);
+      const fin = parseInt(matchRango[2], 10);
+      if (!isNaN(ini) && !isNaN(fin) && fin >= ini && fin - ini <= 150) {
+        for (let n = ini; n <= fin; n++) numerosArticulosAcotados.add(n);
+      }
+    }
+    const regexArtSuelto = /\bart(?:ículo|iculo|s)?\.?\s*(\d{1,3})\b/gi;
+    let matchSuelto: RegExpExecArray | null;
+    while ((matchSuelto = regexArtSuelto.exec(acotacionLimpia)) !== null) {
+      const num = parseInt(matchSuelto[1], 10);
+      if (!isNaN(num)) numerosArticulosAcotados.add(num);
+    }
+
+    const stopWords = new Set([
+      'titulo', 'capitulo', 'seccion', 'libro', 'articulos', 'articulo', 'arts',
+      'sobre', 'para', 'del', 'las', 'los', 'una', 'con', 'por', 'ley', 'real', 'decreto',
+    ]);
+    normalizarTexto(acotacionLimpia)
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4 && !stopWords.has(w) && !/^\d+$/.test(w))
+      .forEach((w) => palabrasClaveAcotadas.push(w));
+  }
+
+  const calcularAfinidadConAcotacion = (p: PreguntaExamen): number => {
+    if (!acotacionLimpia) return 0;
+    let score = 0;
+    const artTxt = p.justificacionLegal?.articulo || '';
+    const matchNumArt = artTxt.match(/\b(\d{1,3})\b/);
+    if (matchNumArt && numerosArticulosAcotados.size > 0) {
+      const nArt = parseInt(matchNumArt[1], 10);
+      if (numerosArticulosAcotados.has(nArt)) {
+        score += 10;
+      }
+    }
+    if (palabrasClaveAcotadas.length > 0) {
+      const textoPregunta = normalizarTexto(
+        `${p.enunciado} ${p.justificacionLegal?.articulo || ''} ${p.justificacionLegal?.fundamento || ''}`
+      );
+      for (const kw of palabrasClaveAcotadas) {
+        if (textoPregunta.includes(kw)) score += 2;
+      }
+    }
+    return score;
+  };
 
   // Registro de exclusión de preguntas recientes de turnos anteriores
   const excluidasNorm = new Set(
@@ -5782,9 +5838,13 @@ export function generarBancoPreguntasBOE(
     const tagsConPreguntas = tagsSolicitados.filter((t) => bucketPorTag[t].length > 0);
 
     if (tagsConPreguntas.length > 0) {
-      // Ordenar y barajar cada bucket evitando preguntas ya usadas recientemente
+      // Ordenar y barajar cada bucket priorizando la acotación de Título/Capítulo/Artículos si existe
       tagsConPreguntas.forEach((t) => {
         bucketPorTag[t].sort((a, b) => {
+          const aAfinidad = calcularAfinidadConAcotacion(a);
+          const bAfinidad = calcularAfinidadConAcotacion(b);
+          if (aAfinidad !== bAfinidad) return bAfinidad - aAfinidad;
+
           const aNormEnunciado = normalizarTexto(a.enunciado.slice(0, 80));
           const bNormEnunciado = normalizarTexto(b.enunciado.slice(0, 80));
           const aExcluida = excluidasNorm.has(aNormEnunciado) ? 1 : 0;
@@ -5798,7 +5858,7 @@ export function generarBancoPreguntasBOE(
       // Reparto rigurosamente equitativo round-robin ÚNICAMENTE entre las leyes solicitadas
       const indicesPorTag: Record<string, number> = {};
       tagsConPreguntas.forEach((t) => {
-        indicesPorTag[t] = Math.floor(Math.random() * bucketPorTag[t].length);
+        indicesPorTag[t] = acotacionLimpia ? 0 : Math.floor(Math.random() * bucketPorTag[t].length);
       });
 
       for (let i = 0; i < cantidadDeseada; i++) {
@@ -5914,9 +5974,13 @@ export function generarBancoPreguntasBOE(
   // Garantiza ~25% para cada letra (A, B, C, D) e independiza la longitud
   const preguntasBalanceadas = balancearYDistribuirOpciones(preguntasGeneradas);
 
+  const sufijoAcotacion = acotacionLimpia
+    ? ` · [${acotacionLimpia.length > 75 ? `${acotacionLimpia.slice(0, 72)}...` : acotacionLimpia}]`
+    : '';
+
   const titulo = isSupuesto
-    ? `Supuesto Práctico Oficial BOE (${ambito}) - ${cantidadDeseada} Preguntas Normativas`
-    : `Batería Oficial Normativa BOE (${ambito}) - ${cantidadDeseada} Preguntas`;
+    ? `Supuesto Práctico Oficial BOE (${ambito}) - ${cantidadDeseada} Preguntas${sufijoAcotacion}`
+    : `Batería Oficial Normativa BOE (${ambito}) - ${cantidadDeseada} Preguntas${sufijoAcotacion}`;
 
   // MAPEO DE LEYES APLICADAS: Solo incluir las leyes efectivamente solicitadas o activas
   const mapaLeyesPorTag: Record<string, string> = {

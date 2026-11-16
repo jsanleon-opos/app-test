@@ -16,6 +16,7 @@ import { obtenerUrlBOEParaNorma, renderizarTextoConEnlacesBOE } from '../utils/b
 import { SelectorLeyesEInformaticaModal } from './SelectorLeyesEInformaticaModal';
 import { ConfirmarEvaluacionModal } from './ConfirmarEvaluacionModal';
 import { GestorRecursosArgumentacionPregunta } from './GestorRecursosArgumentacionPregunta';
+import { calcularClasesAjusteVentanaModoLectura } from '../utils/modoLecturaFitHelper';
 
 interface SeccionTestPreguntasFalladasProps {
   historialPruebas: ExamenCompleto[];
@@ -437,32 +438,23 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
       ? ((testActivo.resultado.puntuacionDirecta / Math.max(1, testActivo.preguntas.length)) * 70).toFixed(2)
       : '0.00';
 
-    const claseEnunciadoModoLectura =
-      tamanoModoLectura === 'extra'
-        ? 'text-xl sm:text-2xl md:text-[27px] leading-relaxed'
-        : tamanoModoLectura === 'muy_grande'
-        ? 'text-lg sm:text-xl md:text-[23px] leading-relaxed'
-        : 'text-base sm:text-lg md:text-[20px] leading-relaxed';
-
-    const claseOpcionModoLectura =
-      tamanoModoLectura === 'extra'
-        ? 'text-base sm:text-lg md:text-[20px] leading-relaxed'
-        : tamanoModoLectura === 'muy_grande'
-        ? 'text-sm sm:text-base md:text-[18px] leading-relaxed'
-        : 'text-sm sm:text-[16px] leading-relaxed';
-
-    const claseBadgeLetraModoLectura =
-      tamanoModoLectura === 'extra'
-        ? 'w-9 h-9 text-base rounded-xl'
-        : tamanoModoLectura === 'muy_grande'
-        ? 'w-8 h-8 text-sm rounded-xl'
-        : 'w-7 h-7 text-xs rounded-lg';
+    const ajusteLectura = calcularClasesAjusteVentanaModoLectura(
+      preguntaActual,
+      tamanoModoLectura,
+      false
+    );
 
     return (
-      <div className={modoLectura ? 'max-w-4xl mx-auto w-full space-y-4 py-1' : 'space-y-5'}>
+      <div
+        className={
+          modoLectura
+            ? 'flex-1 min-h-0 max-w-4xl mx-auto w-full flex flex-col gap-2 sm:gap-2.5 overflow-hidden'
+            : 'space-y-5'
+        }
+      >
         {/* BARRA MINIMALISTA DE CONCENTRACIÓN EN MODO LECTURA */}
         {modoLectura && (
-          <div className="bg-white/95 dark:bg-slate-900/95 border border-indigo-200 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-2.5">
+          <div className="shrink-0 bg-white/95 dark:bg-slate-900/95 border border-indigo-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 shadow-sm flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="text-xs font-black tracking-tight text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
                 <i className="fa-solid fa-book-open-reader text-indigo-600 dark:text-indigo-400"></i>
@@ -817,13 +809,13 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
           <div
             className={
               modoLectura
-                ? 'bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-3xl px-6 sm:px-12 py-8 sm:py-11 shadow-lg min-h-[480px] flex flex-col justify-between gap-7'
+                ? `bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg ${ajusteLectura.claseContenedorTarjeta}`
                 : 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4'
             }
           >
             {/* Cabecera de la pregunta */}
             {modoLectura ? (
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-slate-500 dark:text-slate-400 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="shrink-0 flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <span className="font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                   PREGUNTA #{indicePreguntaActual + 1} DE {testActivo.preguntas.length}
                 </span>
@@ -940,11 +932,11 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
             )}
 
             {/* Cuerpo central: Enunciado y Opciones A, B, C, D */}
-            <div className={modoLectura ? 'space-y-7 my-auto' : 'space-y-4'}>
+            <div className={modoLectura ? ajusteLectura.claseBloqueCentral : 'space-y-4'}>
               <p
                 className={
                   modoLectura
-                    ? `max-w-3xl mx-auto w-full text-center font-bold text-slate-900 dark:text-white ${claseEnunciadoModoLectura}`
+                    ? `max-w-3xl mx-auto w-full text-center font-bold text-slate-900 dark:text-white ${ajusteLectura.claseEnunciado}`
                     : 'text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-relaxed'
                 }
               >
@@ -952,7 +944,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
               </p>
 
               {/* Opciones A, B, C, D (altura invariable, colores suaves, visado verde ✓ y aspa roja ✗) */}
-              <div className={modoLectura ? 'max-w-3xl mx-auto w-full space-y-3.5' : 'space-y-2.5 pt-1'}>
+              <div className={modoLectura ? `max-w-3xl mx-auto w-full ${ajusteLectura.claseListaOpciones}` : 'space-y-2.5 pt-1'}>
                 {preguntaActual.opciones.map((opc) => {
                   const seleccionada = respActual === opc.id;
                   let claseCaja =
@@ -1011,17 +1003,19 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
                       key={opc.id}
                       onClick={() => handleSeleccionarOpcion(indicePreguntaActual, opc.id)}
                       className={`${
-                        modoLectura ? 'px-5 py-4 rounded-2xl border-2 items-center' : 'p-3.5 rounded-xl border items-start'
-                      } transition-colors cursor-pointer flex justify-between gap-3.5 ${claseCaja}`}
+                        modoLectura
+                          ? `${ajusteLectura.claseCajaOpcion} border-2 items-center`
+                          : 'p-3.5 rounded-xl border items-start'
+                      } transition-colors cursor-pointer flex justify-between gap-3 ${claseCaja}`}
                     >
                       {modoLectura ? (
                         <>
                           <span
-                            className={`${claseBadgeLetraModoLectura} font-mono font-black flex items-center justify-center shrink-0 ${claseLetra}`}
+                            className={`${ajusteLectura.claseBadgeLetra} font-mono font-black flex items-center justify-center shrink-0 ${claseLetra}`}
                           >
                             {opc.id}
                           </span>
-                          <span className={`flex-1 text-center font-medium block ${claseOpcionModoLectura}`}>
+                          <span className={`flex-1 text-center font-medium block ${ajusteLectura.claseTextoOpcion}`}>
                             {opc.texto}
                           </span>
                           <span className="h-7 w-7 shrink-0 flex items-center justify-center">
@@ -1053,7 +1047,7 @@ export const SeccionTestPreguntasFalladas: React.FC<SeccionTestPreguntasFalladas
             </div>
 
             {/* Pie de la tarjeta: navegación y botón de abrir ventana Justificación BOE */}
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div className="shrink-0 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <button
                   type="button"

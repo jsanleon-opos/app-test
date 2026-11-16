@@ -40,6 +40,7 @@ import {
   limpiarPropiedadesRedundantes,
   soportaCompresionGzipNativa,
 } from './backupCompression';
+import { guardarArchivosSegunPreferenciaCarpeta } from './exportFolderManager';
 
 const STORAGE_KEY_RECURSOS_ARGUMENTACION = 'c1_recursos_argumentacion_preguntas';
 const STORAGE_KEY_BIBLIOTECA_DOCUMENTOS = 'c1_biblioteca_documentos';
@@ -3216,6 +3217,11 @@ export async function guardarArchivoConSelectorCarpeta(
     JSON.parse(dataString);
   }
   const blob = new Blob([dataString], { type: `${mimeType};charset=utf-8` });
+  const resultado = await guardarArchivosSegunPreferenciaCarpeta([
+    { blob, nombreArchivo: nombreSugerido, mimeType },
+  ]);
+  if (resultado.cancelado) return false;
+  if (resultado.ok) return true;
   return descargarBlobConObjectURL(blob, nombreSugerido);
 }
 
@@ -3449,7 +3455,7 @@ export interface OpcionesExportacionCopiaAvanzada {
  */
 export async function exportarCopiaSeguridadAvanzada(
   opciones: OpcionesExportacionCopiaAvanzada
-): Promise<{ ok: boolean; resumen: ResumenCopiaSeguridadExportada }> {
+): Promise<{ ok: boolean; resumen?: ResumenCopiaSeguridadExportada }> {
   const {
     modalidad,
     formato,
@@ -3902,9 +3908,23 @@ export async function exportarCopiaSeguridadAvanzada(
       ? Math.round((1 - tamanoBytes / tamanoSinComprimirBytes) * 100)
       : 0;
 
-  const okDescarga = descargarBlobConObjectURL(blobFinal, nombreArchivo);
-  if (!okDescarga) {
-    throw new Error('No se pudo iniciar la descarga en el navegador.');
+  const resultadoGuardado = await guardarArchivosSegunPreferenciaCarpeta([
+    {
+      blob: blobFinal,
+      nombreArchivo,
+      mimeType: formato === 'json_gz' ? 'application/gzip' : 'application/json',
+    },
+  ]);
+
+  if (resultadoGuardado.cancelado) {
+    return { ok: false };
+  }
+
+  if (!resultadoGuardado.ok) {
+    const okFallback = descargarBlobConObjectURL(blobFinal, nombreArchivo);
+    if (!okFallback) {
+      throw new Error('No se pudo guardar ni iniciar la descarga en el navegador.');
+    }
   }
 
   return {

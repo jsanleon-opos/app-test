@@ -37,6 +37,7 @@ import { SelectorLeyesEInformaticaModal } from './SelectorLeyesEInformaticaModal
 import { ConfirmarEvaluacionModal } from './ConfirmarEvaluacionModal';
 import { GestorRecursosArgumentacionPregunta } from './GestorRecursosArgumentacionPregunta';
 import { SubseccionExportacionSimulacroPDF } from './SubseccionExportacionSimulacroPDF';
+import { calcularClasesAjusteVentanaModoLectura } from '../utils/modoLecturaFitHelper';
 
 interface SeccionSimulacroOficialProps {
   bancoExamenes: ExamenCompleto[];
@@ -1929,18 +1930,30 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
 
     const claseRelatoModoLectura =
       tamanoModoLectura === 'extra'
-        ? 'text-base sm:text-lg leading-relaxed'
-        : tamanoModoLectura === 'muy_grande'
         ? 'text-sm sm:text-base leading-relaxed'
-        : 'text-xs sm:text-sm leading-relaxed';
+        : tamanoModoLectura === 'muy_grande'
+        ? 'text-xs sm:text-sm leading-relaxed'
+        : 'text-xs leading-relaxed';
+
+    const ajusteLecturaSim = calcularClasesAjusteVentanaModoLectura(
+      preguntaActual,
+      tamanoModoLectura,
+      Boolean(esPreguntaSupuesto && simulacroActivo.contextoCaso && mostrarRelatoSupuestoEnPregunta)
+    );
 
     return (
-      <div className={modoLectura ? 'max-w-4xl mx-auto w-full space-y-4 py-1' : 'space-y-5'}>
+      <div
+        className={
+          modoLectura
+            ? 'flex-1 min-h-0 max-w-4xl mx-auto w-full flex flex-col gap-2 sm:gap-2.5 overflow-hidden'
+            : 'space-y-5'
+        }
+      >
         {!modoLectura && barraPestanasSimulacro}
 
         {/* BARRA MINIMALISTA DE CONCENTRACIÓN EN MODO LECTURA */}
         {modoLectura && (
-          <div className="bg-white/95 dark:bg-slate-900/95 border border-indigo-200 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-2.5">
+          <div className="shrink-0 bg-white/95 dark:bg-slate-900/95 border border-indigo-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 shadow-sm flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="text-xs font-black tracking-tight text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
                 <i className="fa-solid fa-book-open-reader text-indigo-600 dark:text-indigo-400"></i>
@@ -2489,7 +2502,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
           ? Boolean(esPreguntaSupuesto && simulacroActivo.contextoCaso)
           : Boolean(esPreguntaSupuesto || simulacroActivo.contextoCaso)) && (
           <div
-            className={`rounded-2xl border-2 p-4 sm:p-5 transition-all ${
+            className={`${modoLectura ? 'shrink-0 px-4 py-2.5' : 'p-4 sm:p-5'} rounded-2xl border-2 transition-all ${
               esPreguntaSupuesto
                 ? 'bg-amber-50/70 dark:bg-amber-950/25 border-amber-300 dark:border-amber-800 shadow-xs'
                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
@@ -2522,8 +2535,10 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
 
             {mostrarRelatoSupuestoEnPregunta && (
               <div
-                className={`mt-3 pt-3 border-t border-amber-200/70 dark:border-slate-700 text-slate-800 dark:text-slate-200 whitespace-pre-line font-medium ${
-                  modoLectura ? `max-w-3xl mx-auto text-center ${claseRelatoModoLectura}` : 'text-xs sm:text-sm leading-relaxed'
+                className={`mt-2 pt-2 border-t border-amber-200/70 dark:border-slate-700 text-slate-800 dark:text-slate-200 whitespace-pre-line font-medium ${
+                  modoLectura
+                    ? `max-w-3xl mx-auto text-center max-h-[20dvh] overflow-y-auto pr-1 ${claseRelatoModoLectura}`
+                    : 'text-xs sm:text-sm leading-relaxed'
                 }`}
               >
                 {simulacroActivo.contextoCaso}
@@ -2537,12 +2552,12 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
           <div
             className={
               modoLectura
-                ? 'bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-3xl px-6 sm:px-12 py-8 sm:py-11 shadow-lg min-h-[480px] flex flex-col justify-between gap-7'
+                ? `bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg ${ajusteLecturaSim.claseContenedorTarjeta}`
                 : 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-6 shadow-md space-y-4'
             }
           >
             {modoLectura ? (
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-slate-500 dark:text-slate-400 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="shrink-0 flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <span className="font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                   {preguntaActual.esReserva
                     ? `RESERVA R${preguntaActual.numeroReserva} (${
@@ -2683,11 +2698,11 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
             )}
 
             {/* Cuerpo central: Enunciado y Opciones A, B, C, D */}
-            <div className={modoLectura ? 'space-y-7 my-auto' : 'space-y-4'}>
+            <div className={modoLectura ? ajusteLecturaSim.claseBloqueCentral : 'space-y-4'}>
               <p
                 className={
                   modoLectura
-                    ? `max-w-3xl mx-auto w-full text-center font-bold text-slate-900 dark:text-white ${claseEnunciadoModoLectura}`
+                    ? `max-w-3xl mx-auto w-full text-center font-bold text-slate-900 dark:text-white ${ajusteLecturaSim.claseEnunciado}`
                     : 'text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-relaxed'
                 }
               >
@@ -2695,7 +2710,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
               </p>
 
               {/* Opciones A, B, C, D (altura invariable, colores atenuados, visado verde ✓ y aspa roja ✗) */}
-              <div className={modoLectura ? 'max-w-3xl mx-auto w-full space-y-3.5' : 'space-y-2.5 pt-1'}>
+              <div className={modoLectura ? `max-w-3xl mx-auto w-full ${ajusteLecturaSim.claseListaOpciones}` : 'space-y-2.5 pt-1'}>
                 {preguntaActual.opciones.map((opc) => {
                   const seleccionada = respActual === opc.id;
                   let claseCaja =
@@ -2754,17 +2769,19 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
                       key={opc.id}
                       onClick={() => handleSeleccionarOpcion(indicePreguntaActual, opc.id)}
                       className={`${
-                        modoLectura ? 'px-5 py-4 rounded-2xl border-2 items-center' : 'p-3.5 rounded-xl border items-start'
-                      } transition-colors cursor-pointer flex justify-between gap-3.5 ${claseCaja}`}
+                        modoLectura
+                          ? `${ajusteLecturaSim.claseCajaOpcion} border-2 items-center`
+                          : 'p-3.5 rounded-xl border items-start'
+                      } transition-colors cursor-pointer flex justify-between gap-3 ${claseCaja}`}
                     >
                       {modoLectura ? (
                         <>
                           <span
-                            className={`${claseBadgeLetraModoLectura} font-mono font-black flex items-center justify-center shrink-0 ${claseLetra}`}
+                            className={`${ajusteLecturaSim.claseBadgeLetra} font-mono font-black flex items-center justify-center shrink-0 ${claseLetra}`}
                           >
                             {opc.id}
                           </span>
-                          <span className={`flex-1 text-center font-medium block ${claseOpcionModoLectura}`}>
+                          <span className={`flex-1 text-center font-medium block ${ajusteLecturaSim.claseTextoOpcion}`}>
                             {opc.texto}
                           </span>
                           <span className="h-7 w-7 shrink-0 flex items-center justify-center">
@@ -2795,7 +2812,7 @@ export const SeccionSimulacroOficial: React.FC<SeccionSimulacroOficialProps> = (
             </div>
 
             {/* Navegación Anterior / Siguiente + Acceso a Ventana Justificación sin variar altura */}
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+            <div className="shrink-0 pt-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
               <button
                 type="button"
                 disabled={indicePreguntaActual === 0}

@@ -44,6 +44,8 @@ import {
   formatearBadgeConvocatoriaOficial,
   limpiarTextoConvocatoria,
 } from '../utils/tematicaClassifier';
+import { obtenerEstructuraParaLey } from '../constants/estructuraLeyesBOE';
+import { calcularClasesAjusteVentanaModoLectura } from '../utils/modoLecturaFitHelper';
 
 interface AITestGeneratorProps {
   onExamenGuardado: (examen: ExamenCompleto) => void;
@@ -107,6 +109,59 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
     LEYES_BOE_DISPONIBLES[4].nombre, // RD 364/1995
     LEYES_BOE_DISPONIBLES[5].nombre, // RD 365/1995
   ]);
+
+  // Selección de aspecto concreto de Ley o Real Decreto (Título, Capítulo, Sección o Artículos)
+  const [mostrarSelectorAspectosLey, setMostrarSelectorAspectosLey] = useState<boolean>(false);
+  const [leyActivaAcotacionId, setLeyActivaAcotacionId] = useState<string>(LEYES_BOE_DISPONIBLES[0].idBOE);
+  const [aspectosEstructuradosSeleccionados, setAspectosEstructuradosSeleccionados] = useState<string[]>([]);
+  const [acotacionTextoLibre, setAcotacionTextoLibre] = useState<string>('');
+
+  const leyesDisponiblesMarcadasObjetos = useMemo(() => {
+    return LEYES_BOE_DISPONIBLES.filter((l) => {
+      const visibleEnAmbito = ambito === 'AMBOS' || l.ambito === 'AMBOS' || l.ambito === ambito;
+      if (!visibleEnAmbito) return false;
+      return leyesBOESeleccionadas.some((item) => {
+        if (item === l.nombre) return true;
+        if (l.sigla && item.includes(l.sigla)) return true;
+        const itemNorm = item.toLowerCase();
+        const nomNorm = l.nombre.toLowerCase();
+        const m1 = itemNorm.match(/\b\d+\/\d{4}\b/);
+        const m2 = nomNorm.match(/\b\d+\/\d{4}\b/);
+        if (m1 && m2 && m1[0] === m2[0]) return true;
+        if (itemNorm.includes('trebep') && nomNorm.includes('trebep')) return true;
+        if (itemNorm.includes('constitucion') && nomNorm.includes('constitucion')) return true;
+        return itemNorm.includes(nomNorm) || nomNorm.includes(itemNorm);
+      });
+    });
+  }, [leyesBOESeleccionadas, ambito]);
+
+  useEffect(() => {
+    if (
+      leyesDisponiblesMarcadasObjetos.length > 0 &&
+      !leyesDisponiblesMarcadasObjetos.some((l) => l.idBOE === leyActivaAcotacionId)
+    ) {
+      setLeyActivaAcotacionId(leyesDisponiblesMarcadasObjetos[0].idBOE);
+    }
+  }, [leyesDisponiblesMarcadasObjetos, leyActivaAcotacionId]);
+
+  const resumenAcotacionNormativa = useMemo(() => {
+    const partes: string[] = [];
+    if (aspectosEstructuradosSeleccionados.length > 0) {
+      partes.push(aspectosEstructuradosSeleccionados.join(' | '));
+    }
+    if (acotacionTextoLibre.trim()) {
+      partes.push(acotacionTextoLibre.trim());
+    }
+    return partes.join(' · ');
+  }, [aspectosEstructuradosSeleccionados, acotacionTextoLibre]);
+
+  const toggleAspectoEstructurado = (etiquetaCompleta: string) => {
+    setAspectosEstructuradosSeleccionados((prev) =>
+      prev.includes(etiquetaCompleta)
+        ? prev.filter((item) => item !== etiquetaCompleta)
+        : [...prev, etiquetaCompleta]
+    );
+  };
 
   // Loading & Generation State
   const [isGenerating, setIsGenerating] = useState(false);
@@ -328,7 +383,8 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
       cant,
       tematicasTexto,
       leyesTexto,
-      historialPreguntasRecientes
+      historialPreguntasRecientes,
+      resumenAcotacionNormativa
     );
 
     // Actualizar historial anti-duplicados en IndexedDB
@@ -746,6 +802,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
           numPreguntas: numPreguntas,
           dificultad: dificultad,
           preguntasExcluidas: historialPreguntasRecientes.slice(-25),
+          acotacionNormativa: resumenAcotacionNormativa,
         }),
         signal: controller.signal,
       });
@@ -1079,8 +1136,24 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
     }
   };
 
+  const ajusteModoLectura = useMemo(() => {
+    return calcularClasesAjusteVentanaModoLectura(
+      preguntaActual,
+      tamanoModoLectura,
+      Boolean(examenActivo?.contextoCaso && mostrarCasoModoLectura)
+    );
+  }, [preguntaActual, tamanoModoLectura, examenActivo?.contextoCaso, mostrarCasoModoLectura]);
+
   return (
-    <div className={examenActivo ? 'space-y-3' : 'space-y-6'}>
+    <div
+      className={
+        examenActivo
+          ? modoLectura
+            ? 'flex-1 min-h-0 flex flex-col overflow-hidden w-full'
+            : 'space-y-3'
+          : 'space-y-6'
+      }
+    >
       {/* Sello de Garantía y Fuente Oficial Exclusiva BOE (en configuración; durante el test se integra en el cuadro único superior) */}
       {!examenActivo && (
         <div className="bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-indigo-900/60 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1195,7 +1268,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                   <span>Importar JSON / TXT</span>
                 </button>
                 <span className="text-[9px] font-mono font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded">
-                  Modelo: Gemini 3.8 Flash
+                  Modelo: Gemini 4 Hydrogen
                 </span>
                 <button
                   type="button"
@@ -1508,6 +1581,225 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                   );
                 })}
               </div>
+
+              {/* SUB-PANEL: ACOTAR TÍTULO, CAPÍTULO, SECCIÓN O ARTÍCULOS CONCRETOS DE UNA LEY O REAL DECRETO */}
+              <div className="mt-3 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 bg-white/95 dark:bg-slate-900/85 p-3.5 space-y-3 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="h-7 w-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0">
+                      <i className="fa-solid fa-list-Tree fa-sitemap"></i>
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black text-slate-900 dark:text-white">
+                          Acotar Título, Capítulo, Sección o Artículos concretos (Opcional)
+                        </span>
+                        {resumenAcotacionNormativa ? (
+                          <span className="text-[9.5px] font-mono font-black uppercase px-2 py-0.5 rounded-md bg-indigo-600 text-white">
+                            Acotación activa ({aspectosEstructuradosSeleccionados.length + (acotacionTextoLibre.trim() ? 1 : 0)})
+                          </span>
+                        ) : (
+                          <span className="text-[9.5px] font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                            Toda la norma seleccionada
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                        Selecciona un Título o Capítulo oficial de las leyes/RDs marcados o escribe artículos concretos para focalizar el test IA.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {resumenAcotacionNormativa && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAspectosEstructuradosSeleccionados([]);
+                          setAcotacionTextoLibre('');
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-[10.5px] font-bold cursor-pointer flex items-center gap-1"
+                      >
+                        <i className="fa-solid fa-xmark text-[10px]"></i>
+                        <span>Limpiar acotación</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setMostrarSelectorAspectosLey((prev) => !prev)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                        mostrarSelectorAspectosLey || Boolean(resumenAcotacionNormativa)
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                          : 'bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                      }`}
+                    >
+                      <i className={`fa-solid ${mostrarSelectorAspectosLey ? 'fa-chevron-up' : 'fa-sliders'} text-[10px]`}></i>
+                      <span>{mostrarSelectorAspectosLey ? 'Ocultar Títulos / Capítulos' : 'Elegir Título / Capítulo / Artículos'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {resumenAcotacionNormativa && !mostrarSelectorAspectosLey && (
+                  <div className="p-2.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-[11px] font-semibold text-indigo-900 dark:text-indigo-200 flex items-start gap-2">
+                    <i className="fa-solid fa-bullseye text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0"></i>
+                    <span className="leading-snug">
+                      <strong>Ámbito acotado para la IA:</strong> {resumenAcotacionNormativa}
+                    </span>
+                  </div>
+                )}
+
+                {mostrarSelectorAspectosLey && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700/80 space-y-3">
+                    {/* Pestañas de las Leyes / RDs actualmente seleccionados */}
+                    {leyesDisponiblesMarcadasObjetos.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                          1.º Elige la Ley o Real Decreto marcado para ver sus Títulos y Capítulos:
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {leyesDisponiblesMarcadasObjetos.map((leyObj) => {
+                            const activa = leyObj.idBOE === leyActivaAcotacionId;
+                            const countEnLey = aspectosEstructuradosSeleccionados.filter((item) =>
+                              item.startsWith(`${leyObj.sigla}:`)
+                            ).length;
+                            return (
+                              <button
+                                key={leyObj.idBOE}
+                                type="button"
+                                onClick={() => setLeyActivaAcotacionId(leyObj.idBOE)}
+                                className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  activa
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                                    : 'bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                }`}
+                              >
+                                <span>{leyObj.sigla}</span>
+                                {countEnLey > 0 && (
+                                  <span
+                                    className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-black ${
+                                      activa
+                                        ? 'bg-white text-indigo-700'
+                                        : 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200'
+                                    }`}
+                                  >
+                                    {countEnLey}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Grid de Títulos / Capítulos de la Ley o RD activo */}
+                        {(() => {
+                          const leyActivaObj =
+                            leyesDisponiblesMarcadasObjetos.find((l) => l.idBOE === leyActivaAcotacionId) ||
+                            leyesDisponiblesMarcadasObjetos[0];
+                          if (!leyActivaObj) return null;
+                          const estructuraNorma = obtenerEstructuraParaLey(
+                            leyActivaObj.idBOE,
+                            leyActivaObj.nombre
+                          );
+                          const opcionesEstructura = estructuraNorma?.aspectos || [];
+
+                          if (opcionesEstructura.length === 0) {
+                            return (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic py-1">
+                                Escribe abajo el Título, Capítulo, Sección o rango de artículos específico de «{leyActivaObj.sigla}» sobre el que deseas generar el test.
+                              </p>
+                            );
+                          }
+
+                          return (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10.5px] font-bold text-indigo-700 dark:text-indigo-300">
+                                  Estructura oficial de {leyActivaObj.sigla} ({opcionesEstructura.length} bloques disponibles):
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
+                                {opcionesEstructura.map((itemEst) => {
+                                  const valorCompleto = `${leyActivaObj.sigla}: ${itemEst.descripcionCompleta}`;
+                                  const marcado = aspectosEstructuradosSeleccionados.includes(valorCompleto);
+                                  return (
+                                    <button
+                                      key={itemEst.id}
+                                      type="button"
+                                      title={itemEst.descripcionCompleta}
+                                      onClick={() => toggleAspectoEstructurado(valorCompleto)}
+                                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start justify-between gap-2 ${
+                                        marcado
+                                          ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-950 dark:text-indigo-100 ring-1 ring-indigo-400/50 shadow-2xs'
+                                          : 'border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                      }`}
+                                    >
+                                      <div className="min-w-0">
+                                        <span className="text-[11px] font-bold leading-snug block">
+                                          {itemEst.etiquetaCorta}
+                                        </span>
+                                        {itemEst.articulosClave && (
+                                          <span className="text-[9.5px] font-mono text-indigo-600 dark:text-indigo-400 font-semibold block mt-0.5">
+                                            Arts. {itemEst.articulosClave}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span
+                                        className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
+                                          marcado
+                                            ? 'bg-indigo-600 border-indigo-600 text-white'
+                                            : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600'
+                                        }`}
+                                      >
+                                        {marcado && <i className="fa-solid fa-check text-[9px]"></i>}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Campo libre para indicar cualquier Sección, Capítulo, Artículo o epígrafe concreto */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                        2.º O escribe cualquier Título, Capítulo, Sección, Artículo o epígrafe concreto:
+                      </label>
+                      <div className="relative flex items-center">
+                        <i className="fa-solid fa-pen-ruler text-indigo-500 text-xs absolute left-3 pointer-events-none"></i>
+                        <input
+                          type="text"
+                          value={acotacionTextoLibre}
+                          onChange={(e) => setAcotacionTextoLibre(e.target.value)}
+                          placeholder="Ej.: Título II Capítulo I, Sección 2.ª, Artículos 21 a 24 (Silencio administrativo), Disposiciones adicionales..."
+                          className="w-full pl-8.5 pr-8 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-indigo-500 focus:outline-none text-xs font-semibold text-slate-800 dark:text-slate-100"
+                        />
+                        {acotacionTextoLibre && (
+                          <button
+                            type="button"
+                            onClick={() => setAcotacionTextoLibre('')}
+                            className="absolute right-2.5 text-slate-400 hover:text-rose-500 text-xs cursor-pointer"
+                            title="Borrar texto libre"
+                          >
+                            <i className="fa-solid fa-xmark"></i>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {resumenAcotacionNormativa && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50/85 dark:bg-emerald-950/35 border border-emerald-300 dark:border-emerald-800 text-[11px] text-emerald-900 dark:text-emerald-200 flex items-start gap-2">
+                        <i className="fa-solid fa-circle-check text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0"></i>
+                        <span className="leading-snug">
+                          <strong>Acotación lista para generar:</strong> {resumenAcotacionNormativa}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Step 3: Parámetros y Modalidad */}
@@ -1736,10 +2028,16 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
 
       {/* ACTIVE TEST RUNNER */}
       {examenActivo && preguntaActual && (
-        <div className={modoLectura ? 'space-y-4 max-w-4xl mx-auto w-full' : 'space-y-3'}>
+        <div
+          className={
+            modoLectura
+              ? 'flex-1 min-h-0 max-w-4xl mx-auto w-full flex flex-col gap-2 sm:gap-2.5 overflow-hidden'
+              : 'space-y-3'
+          }
+        >
           {/* BARRA MINIMALISTA DE CONCENTRACIÓN EN 'MODO LECTURA' */}
           {modoLectura && (
-            <div className="bg-white/95 dark:bg-slate-900/95 border border-slate-300 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-2.5">
+            <div className="shrink-0 bg-white/95 dark:bg-slate-900/95 border border-slate-300 dark:border-slate-700 rounded-2xl px-3.5 py-2 shadow-sm flex flex-wrap items-center justify-between gap-2">
               {/* Izquierda: Progreso limpio + Salto directo a pregunta + Reloj discreto */}
               <div className="flex items-center gap-2.5 flex-wrap text-xs text-slate-600 dark:text-slate-300">
                 <span className="font-black text-indigo-600 dark:text-indigo-400 font-mono flex items-center gap-1.5">
@@ -2356,7 +2654,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
             <div
               className={
                 modoLectura
-                  ? 'bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-2xl px-5 py-3.5 shadow-xs space-y-2'
+                  ? 'shrink-0 bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-2xl px-4 py-2.5 shadow-xs space-y-1.5'
                   : 'bg-amber-50/95 dark:bg-amber-950/35 border-2 border-amber-300 dark:border-amber-700 rounded-2xl p-4 shadow-sm space-y-2'
               }
             >
@@ -2386,11 +2684,11 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                     modoLectura
                       ? `${
                           tamanoModoLectura === 'extra'
-                            ? 'text-lg sm:text-xl'
+                            ? 'text-sm sm:text-base'
                             : tamanoModoLectura === 'muy_grande'
-                            ? 'text-base sm:text-lg'
-                            : 'text-sm sm:text-base'
-                        } text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line pt-2 border-t border-amber-200/70 dark:border-amber-800/60`
+                            ? 'text-xs sm:text-sm'
+                            : 'text-xs sm:text-[13px]'
+                        } max-h-[20dvh] overflow-y-auto pr-1 text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line pt-1.5 border-t border-amber-200/70 dark:border-amber-800/60`
                       : 'text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-normal whitespace-pre-line'
                   }
                 >
@@ -2407,20 +2705,20 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
             </div>
           )}
 
-          {/* Question Box ampliado (En Modo Lectura: centrado, limpio de elementos laterales y con fuente mayor) */}
+          {/* Question Box autoajustado a la ventana en Modo Lectura (sin ocultar opciones ni botones en la parte inferior) */}
           <div
             className={
               modoLectura
-                ? 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-3xl px-6 sm:px-12 py-8 sm:py-11 shadow-lg min-h-[490px] sm:min-h-[530px] flex flex-col justify-between gap-7 transition-all'
+                ? `bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 shadow-lg transition-all ${ajusteModoLectura.claseContenedorTarjeta}`
                 : 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-2xl p-5 sm:p-7 shadow-md min-h-[430px] sm:min-h-[465px] flex flex-col justify-between gap-5'
             }
           >
-            <div className={modoLectura ? 'space-y-7' : 'space-y-4'}>
-              <div className={modoLectura ? 'space-y-4' : 'space-y-2.5'}>
+            <div className={modoLectura ? ajusteModoLectura.claseBloqueCentral : 'space-y-4'}>
+              <div className={modoLectura ? 'space-y-2' : 'space-y-2.5'}>
               {/* Cabecera de la pregunta: minimalista y centrada en Modo Lectura; completa en vista estándar */}
               {modoLectura ? (
-                <div className="text-center space-y-1.5">
-                  <div className="flex items-center justify-center gap-2 flex-wrap text-xs font-mono text-slate-500 dark:text-slate-400">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 flex-wrap text-[11px] font-mono text-slate-500 dark:text-slate-400">
                     <span className="font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                       {preguntaActual.esReserva
                         ? `Pregunta de Reserva #${preguntaActual.numeroReserva || 1} de ${preguntasReserva.length || 5}`
@@ -2620,17 +2918,11 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                 </div>
               )}
 
-              {/* Enunciado: centrado y en fuente ampliada cuando Modo Lectura está activo */}
+              {/* Enunciado: centrado y autoajustado a la ventana cuando Modo Lectura está activo */}
               <div
                 className={
                   modoLectura
-                    ? `${
-                        tamanoModoLectura === 'extra'
-                          ? 'text-2xl sm:text-[27px] lg:text-[30px]'
-                          : tamanoModoLectura === 'muy_grande'
-                          ? 'text-xl sm:text-2xl lg:text-[25px]'
-                          : 'text-lg sm:text-xl lg:text-[22px]'
-                      } font-bold text-slate-900 dark:text-white leading-relaxed text-center max-w-3xl mx-auto pt-1`
+                    ? `${ajusteModoLectura.claseEnunciado} font-bold text-slate-900 dark:text-white text-center max-w-3xl mx-auto`
                     : 'text-[15px] sm:text-[17px] font-bold text-slate-900 dark:text-white leading-relaxed pt-1'
                 }
               >
@@ -2646,19 +2938,19 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
               </div>
               </div>
 
-            {/* Options List (altura fija e invariable al responder; centradas y ampliadas en Modo Lectura) */}
+            {/* Options List (altura invariable al responder; centradas y autoajustadas a ventana en Modo Lectura) */}
             {(() => {
               const estaRevelada = (modoCorreccion === 'paso_a_paso' && !!respuestaActual) || examenFinalizado;
-              const claseTextoOpcionModoLectura =
-                tamanoModoLectura === 'extra'
-                  ? 'text-lg sm:text-[22px]'
-                  : tamanoModoLectura === 'muy_grande'
-                  ? 'text-[17px] sm:text-[19px]'
-                  : 'text-base sm:text-[17px]';
 
               return (
                 <>
-                  <div className={modoLectura ? 'space-y-3.5 max-w-3xl mx-auto w-full' : 'space-y-3'}>
+                  <div
+                    className={
+                      modoLectura
+                        ? `${ajusteModoLectura.claseListaOpciones} max-w-3xl mx-auto w-full`
+                        : 'space-y-3'
+                    }
+                  >
                     {preguntaActual.opciones.map((opc) => {
                       const isSelected = respuestaActual === opc.id;
 
@@ -2720,20 +3012,20 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                           onClick={() => seleccionarOpcion(opc.id as any)}
                           className={
                             modoLectura
-                              ? `p-4 sm:px-6 sm:py-4.5 rounded-2xl border ${claseTextoOpcionModoLectura} font-medium cursor-pointer select-none transition-colors flex items-center gap-4 ${optClass}`
+                              ? `${ajusteModoLectura.claseCajaOpcion} border ${ajusteModoLectura.claseTextoOpcion} font-medium cursor-pointer select-none transition-colors flex items-center gap-3.5 ${optClass}`
                               : `p-3.5 sm:p-4 rounded-xl border text-[13.5px] sm:text-[15px] font-medium cursor-pointer select-none transition-colors flex items-start gap-3.5 ${optClass}`
                           }
                         >
                           <span
                             className={
                               modoLectura
-                                ? `h-8 w-8 rounded-xl flex items-center justify-center font-mono font-black text-sm shrink-0 ${badgeClass}`
+                                ? `${ajusteModoLectura.claseBadgeLetra} flex items-center justify-center font-mono font-black shrink-0 ${badgeClass}`
                                 : `h-6.5 w-6.5 rounded-lg flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5 ${badgeClass}`
                             }
                           >
                             {opc.id}
                           </span>
-                          <div className={modoLectura ? 'flex-1 leading-relaxed py-0.5 text-center' : 'flex-1 leading-relaxed py-0.5'}>
+                          <div className={modoLectura ? 'flex-1 py-0.5 text-center' : 'flex-1 leading-relaxed py-0.5'}>
                             <AnnotatedPlainTextViewer
                               text={opc.texto}
                               seccion="opcion"
@@ -2745,7 +3037,7 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
                               onEliminarAnotacion={handleEliminarAnotacion}
                             />
                           </div>
-                          <span className={modoLectura ? 'h-8 w-8 shrink-0 flex items-center justify-center' : 'h-6.5 w-6.5 shrink-0 mt-0.5 flex items-center justify-center'}>
+                          <span className={modoLectura ? 'h-7 w-7 shrink-0 flex items-center justify-center' : 'h-6.5 w-6.5 shrink-0 mt-0.5 flex items-center justify-center'}>
                             {rightIndicator}
                           </span>
                         </div>
@@ -2792,8 +3084,8 @@ export const AITestGenerator: React.FC<AITestGeneratorProps> = ({
             })()}
             </div>
 
-            {/* Bottom Controls */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
+            {/* Bottom Controls (shrink-0 siempre visible en la parte inferior de Modo Lectura) */}
+            <div className="shrink-0 flex items-center justify-between pt-2.5 border-t border-slate-200 dark:border-slate-700">
               <button
                 disabled={
                   filtroPreguntas === 'todas'
